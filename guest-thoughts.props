@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <GuestThoughtRoot>$(MSBuildThisFileDirectory)</GuestThoughtRoot>
+    <EnableGuestThoughts Condition="'$(EnableGuestThoughts)'=='' and '$(Platform)'=='arm64'">true</EnableGuestThoughts>
+    <EnableGuestThoughts Condition="'$(EnableGuestThoughts)'==''">false</EnableGuestThoughts>
+    <GuestThoughtRuntime Condition="'$(GuestThoughtRuntime)'==''">$(GuestThoughtRoot)..\llama.cpp-builds\d775b896-windows-arm64-cuda-13.4\bin</GuestThoughtRuntime>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(EnableGuestThoughts)'=='true'">
+    <ClCompile>
+      <PreprocessorDefinitions>ENABLE_GUEST_THOUGHTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(GuestThoughtRoot)lib\guest-thoughts\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+</Project>

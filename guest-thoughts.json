@@ -1,0 +1,18 @@
+{
+    "llamaRevision": "d775b8967a46d8beb110d444aa3b8938179e0dd8",
+    "sourceSha256": "633b2b92f63faefe1aa36be8558ab6809e9fcb5ab82cd7c5a2c9993194e6b55a",
+    "runtimeHashes": {
+        "llama.dll": "661429f5e2c78b5b5ee1c48bbc498223a5b81efd6b2d364c7540d2d3901c63c7",
+        "ggml.dll": "50ee1c405a5d3d249dbef183591a46f5b4491ebb3a1ef197dff195fc2f8314b6",
+        "ggml-base.dll": "1b8c1b8ccab8e493df5f13b1aa051b827e5f0c80f6b4b4429a37e1c0baf6be17",
+        "ggml-cpu.dll": "76979645e6c7de740eda11911c69b61023b8288c974ddde297a9464a1cfd35b5",
+        "ggml-cuda.dll": "1b4729f99d37cf5279a156b32aa8e58f0783a8e825c087aa79967dcfcd51406d",
+        "libomp.dll": "190b39fe8c05d985b1dce3fd01f35ce1327954562c4e128b1d107e5033f83d61"
+    },
+    "modelRevision": "91cad51170dc346986eccefdc2dd33a9da36ead9",
+    "modelLicenseRevision": "989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+    "modelLicenseSha256": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e",
+    "openmpLicenseSha256": "fdad1758a9e1f9d5a81e18879b3406772115edc92c24bfa36b70c654f325e8e4",
+    "modelFile": "qwen2.5-1.5b-instruct-q8_0.gguf",
+    "modelSha256": "d7efb072e7724d25048a4fda0a3e10b04bdef5d06b1403a1c93bd9f1240a63c8"
+}

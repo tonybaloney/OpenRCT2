@@ -47,6 +47,7 @@
     <ClInclude Include="audio\AudioMixer.h" />
     <ClInclude Include="audio\SDLAudioSource.h" />
     <ClInclude Include="CursorData.h" />
+    <ClInclude Include="guest\LlamaGuestThoughtBackend.h" />
     <ClInclude Include="CursorRepository.h" />
     <ClInclude Include="drawing\BitmapReader.h" />
     <ClInclude Include="drawing\engines\DrawingEngineFactory.hpp" />
@@ -191,6 +192,7 @@
     <ClCompile Include="windows\Footpath.cpp" />
     <ClCompile Include="windows\GameStatusBar.cpp" />
     <ClCompile Include="windows\Guest.cpp" />
+    <ClCompile Include="guest\LlamaGuestThoughtBackend.cpp" />
     <ClCompile Include="windows\GuestList.cpp" />
     <ClCompile Include="windows\InstallTrack.cpp" />
     <ClCompile Include="windows\Land.cpp" />
@@ -282,4 +284,5 @@
     </Lib>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Import Project="..\..\guest-thoughts.targets" />
 </Project>

@@ -51,6 +51,29 @@ endif ()
 add_executable(openrct2 ${OPENRCT2_UI_SOURCES} ${OPENRCT2_UI_MM_SOURCES})
 add_executable(OpenRCT2::openrct2 ALIAS openrct2)
 
+if (ENABLE_GUEST_THOUGHTS)
+    if (NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(ARM64|arm64|aarch64)$" AND
+        NOT CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64")
+        message(FATAL_ERROR "The supplied guest-thought runtime is ARM64, not ${CMAKE_SYSTEM_PROCESSOR}.")
+    endif ()
+    execute_process(
+        COMMAND powershell.exe -NoProfile -File "${ROOT_DIR}/scripts/prepare-guest-thoughts.ps1"
+            -Root "${ROOT_DIR}" -RuntimeDirectory "${GUEST_THOUGHT_RUNTIME}"
+        RESULT_VARIABLE GUEST_THOUGHT_SETUP_RESULT)
+    if (NOT GUEST_THOUGHT_SETUP_RESULT EQUAL 0)
+        message(FATAL_ERROR "Pinned guest-thought dependency setup failed.")
+    endif ()
+    target_compile_definitions(openrct2 PRIVATE ENABLE_GUEST_THOUGHTS)
+    target_include_directories(openrct2 SYSTEM PRIVATE "${ROOT_DIR}/lib/guest-thoughts/include")
+    add_custom_command(TARGET openrct2 POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${ROOT_DIR}/bin/guest-thoughts" "$<TARGET_FILE_DIR:openrct2>/guest-thoughts"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:openrct2>/models"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${ROOT_DIR}/bin/models/qwen2.5-1.5b-instruct-q8_0.gguf" "$<TARGET_FILE_DIR:openrct2>/models/"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${ROOT_DIR}/bin/models/Qwen-LICENSE" "$<TARGET_FILE_DIR:openrct2>/models/")
+endif ()
+
 SET_CHECK_CXX_FLAGS(openrct2)
 ipo_set_target_properties(openrct2)
 

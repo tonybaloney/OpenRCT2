@@ -118,6 +118,7 @@
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <Import Project="guest-thoughts.props" />
 
   <PropertyGroup>
     <IncludePath>$(SolutionDir)src;$(SolutionDir)src\thirdparty;$(SolutionDir)src\thirdparty\quickjs-ng;$(SolutionDir)lib\$(Platform)\include;$(SolutionDir)lib\$(Platform)\include\SDL2;$(SolutionDir)lib\$(Platform)\include\crashpad;$(IncludePath)</IncludePath>
@@ -136,4 +137,3 @@
     <VcpkgEnabled>false</VcpkgEnabled>
   </PropertyGroup>
 </Project>
-

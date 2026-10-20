@@ -119,6 +119,17 @@ option(ENABLE_UBSAN "Enable the UndefinedBehaviourSanitizer.")
 option(ENABLE_HEADERS_CHECK "Check if include directives in header files are correct. Only works with clang" OFF)
 option(DISABLE_GUI "Don't build GUI. (Headless only.)")
 
+set(GUEST_THOUGHTS_DEFAULT OFF)
+if (WIN32 AND NOT DISABLE_GUI AND
+    (CMAKE_SYSTEM_PROCESSOR MATCHES "^(ARM64|arm64|aarch64)$" OR CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64"))
+    set(GUEST_THOUGHTS_DEFAULT ON)
+endif ()
+option(ENABLE_GUEST_THOUGHTS "Enable experimental embedded ARM64 CUDA guest thoughts" ${GUEST_THOUGHTS_DEFAULT})
+set(GUEST_THOUGHT_RUNTIME "${ROOT_DIR}/../llama.cpp-builds/d775b896-windows-arm64-cuda-13.4/bin"
+    CACHE PATH "Pinned guest-thought runtime directory")
+if (ENABLE_GUEST_THOUGHTS AND (NOT WIN32 OR DISABLE_GUI))
+    message(FATAL_ERROR "Embedded guest thoughts require the Windows ARM64 UI build.")
+endif ()
 
 if (FORCE32)
     set(TARGET_M "-m32")

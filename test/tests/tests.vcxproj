@@ -89,6 +89,10 @@
     <ClCompile Include="Endianness.cpp" />
     <ClCompile Include="EnumMapTest.cpp" />
     <ClCompile Include="FormattingTests.cpp" />
+    <ClCompile Include="GuestNarrativeTests.cpp" />
+    <ClCompile Include="GuestThoughtServiceTests.cpp" />
+    <ClCompile Include="GuestThoughtModelTests.cpp" />
+    <ClCompile Include="..\..\src\openrct2-ui\guest\LlamaGuestThoughtBackend.cpp" Condition="'$(EnableGuestThoughts)'=='true'" />
     <ClCompile Include="LanguagePackTest.cpp" />
     <ClCompile Include="ImageImporterTests.cpp" />
     <ClCompile Include="IniReaderTest.cpp" />
@@ -130,4 +134,3 @@
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
-

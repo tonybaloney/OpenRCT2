@@ -6946,6 +6946,15 @@ namespace OpenRCT2
         return peepFlags.has(PeepFlag::leavingPark) || !guestHeadingToRideId.IsNull();
     }
 
+    RideId GetPeepThoughtRideId(const PeepThought& thought)
+    {
+        const auto index = EnumValue(thought.type);
+        if (index < std::size(PeepThoughtToActionMap)
+            && (PeepThoughtToActionMap[index].flags & PEEP_THOUGHT_ACTION_FLAG_RIDE))
+            return thought.rideId;
+        return RideId::GetNull();
+    }
+
     /**
      * rct2: 0x00698342
      * thought.item (eax)

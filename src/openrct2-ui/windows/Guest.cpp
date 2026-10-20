@@ -8,6 +8,7 @@
  *****************************************************************************/
 
 #include "../interface/ViewportQuery.h"
+#include "../UiContext.h"
 
 #include <array>
 #include <openrct2-ui/interface/Dropdown.h>
@@ -26,6 +27,7 @@
 #include <openrct2/core/String.hpp>
 #include <openrct2/drawing/ColourMap.h>
 #include <openrct2/drawing/Drawing.h>
+#include <openrct2/drawing/Drawing.String.h>
 #include <openrct2/drawing/PickupPeep.h>
 #include <openrct2/drawing/Rectangle.h>
 #include <openrct2/drawing/RenderTarget.h>
@@ -40,6 +42,7 @@
 #include <openrct2/object/ObjectManager.h>
 #include <openrct2/object/PeepAnimationsObject.h>
 #include <openrct2/peep/PeepActionFormat.h>
+#include <openrct2/peep/GuestThoughtService.h>
 #include <openrct2/peep/PeepSpriteIds.h>
 #include <openrct2/ride/RideManager.hpp>
 #include <openrct2/ride/ShopItem.h>
@@ -214,6 +217,47 @@ namespace OpenRCT2::Ui::Windows
         int16_t _pickedPeepX = kLocationNull; // entity->x gets set to 0x8000 on pickup, this is the old value
         std::vector<RideId> _riddenRides;
         u8string _windowTitle{};
+        uint64_t _thoughtTicket{};
+        std::string _generatedThought;
+        bool _replaceNativeThoughts{};
+
+        void releaseGeneratedThought()
+        {
+            if (_thoughtTicket != 0)
+            {
+                if (auto* service = GetGuestThoughtService())
+                    service->release(_thoughtTicket);
+                _thoughtTicket = 0;
+            }
+            _generatedThought.clear();
+            _replaceNativeThoughts = false;
+        }
+
+        void updateGeneratedThought(const Guest& guest)
+        {
+            auto* service = GetGuestThoughtService();
+            if (!service)
+            {
+                _generatedThought.clear();
+                _replaceNativeThoughts = false;
+                return;
+            }
+            if (_thoughtTicket == 0)
+                _thoughtTicket = service->subscribe();
+            service->update(
+                _thoughtTicket, CaptureGuestNarrative(guest, !getGameState().park.flags.has(ParkFlag::noMoney)));
+            const auto result = service->read(_thoughtTicket);
+            const auto replaceNative = result.status != GuestThoughtService::Status::unavailable;
+            const auto text = result.status == GuestThoughtService::Status::ready ? result.text
+                : result.status == GuestThoughtService::Status::pending          ? "Thinking..."
+                                                                                : "Thoughts unavailable";
+            if (text != _generatedThought || replaceNative != _replaceNativeThoughts)
+            {
+                _generatedThought = text;
+                _replaceNativeThoughts = replaceNative;
+                invalidate();
+            }
+        }
 
     public:
         void onOpen() override
@@ -238,6 +282,7 @@ namespace OpenRCT2::Ui::Windows
 
         void onClose() override
         {
+            releaseGeneratedThought();
             if (isToolActive(classification, number))
                 ToolCancel();
         }
@@ -516,6 +561,7 @@ namespace OpenRCT2::Ui::Windows
             if (page == newPage && !widgets.empty())
                 return;
 
+            releaseGeneratedThought();
             page = newPage;
             currentFrame = 0;
             _riddenRides.clear();
@@ -533,6 +579,11 @@ namespace OpenRCT2::Ui::Windows
 
             if (listen && viewport != nullptr)
                 viewport->flags.set(ViewportFlag::soundOn);
+            if (page == WINDOW_GUEST_THOUGHTS)
+            {
+                if (const auto* guest = GetGuest())
+                    updateGeneratedThought(*guest);
+            }
         }
 
 #pragma region Overview
@@ -1546,6 +1597,7 @@ namespace OpenRCT2::Ui::Windows
             {
                 return;
             }
+            updateGeneratedThought(*peep);
             if (peep->windowInvalidateFlags & PEEP_INVALIDATE_PEEP_THOUGHTS)
             {
                 peep->windowInvalidateFlags &= ~PEEP_INVALIDATE_PEEP_THOUGHTS;
@@ -1572,6 +1624,40 @@ namespace OpenRCT2::Ui::Windows
 
             auto screenCoords = windowPos
                 + ScreenCoordsXY{ widgets[WIDX_PAGE_BACKGROUND].left + 4, widgets[WIDX_PAGE_BACKGROUND].top + 14 };
+
+            if (!_generatedThought.empty())
+            {
+                auto text = _generatedThought;
+                const auto thoughtWidth = widgets[WIDX_PAGE_BACKGROUND].width() - 8;
+                std::string wrapped;
+                int32_t breaks = 0;
+                while (!text.empty())
+                {
+                    wrapString(text, thoughtWidth, FontStyle::small, &wrapped, &breaks);
+                    if (breaks < kGuestNarrativeMaxLines
+                        && String::lengthOf(text.c_str()) <= kGuestNarrativeMaxCharacters)
+                        break;
+                    if (text.ends_with("..."))
+                        text.resize(text.size() - 3);
+                    const auto space = text.rfind(' ');
+                    if (space == std::string::npos)
+                    {
+                        text.clear();
+                        break;
+                    }
+                    text.resize(space);
+                    text += "...";
+                }
+                if (!text.empty())
+                {
+                    drawText(rt, screenCoords, "{BLACK}", { FontStyle::small });
+                    TextPaint paint(kColourNull, FontStyle::small, { TextPaintFlag::noFormatting });
+                    screenCoords.y += drawTextWrapped(rt, screenCoords, thoughtWidth, text, paint) + 4;
+                }
+            }
+
+            if (_replaceNativeThoughts)
+                return;
 
             for (const auto& thought : peep->thoughts)
             {

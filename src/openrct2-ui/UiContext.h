@@ -19,6 +19,7 @@ struct SDL_Window;
 namespace OpenRCT2
 {
     struct IPlatformEnvironment;
+    class GuestThoughtService;
 } // namespace OpenRCT2
 
 namespace OpenRCT2::Ui
@@ -56,4 +57,5 @@ namespace OpenRCT2::Ui
     [[nodiscard]] InGameConsole& GetInGameConsole();
     [[nodiscard]] InputManager& GetInputManager();
     [[nodiscard]] ShortcutManager& GetShortcutManager();
+    [[nodiscard]] GuestThoughtService* GetGuestThoughtService();
 } // namespace OpenRCT2::Ui

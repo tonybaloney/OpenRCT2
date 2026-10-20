@@ -96,6 +96,69 @@ Some \*BSD operating systems offer native packages:
 - [Building OpenRCT2 on Windows Subsystem for Linux](https://github.com/OpenRCT2/OpenRCT2/wiki/Building-OpenRCT2-on-Windows-Subsystem-for-Linux)
 - [Building OpenRCT2 on MSYS2 MinGW](https://github.com/OpenRCT2/OpenRCT2/wiki/Building-OpenRCT2-on-MSYS2-MinGW)
 
+## Windows ARM64
+
+Install Visual Studio's ARM64 C++ build tools, a Windows SDK, and the **C# and Visual Basic Roslyn compilers** component (`Microsoft.VisualStudio.Component.Roslyn.Compiler`). The Roslyn compiler is required for the inline MSBuild dependency tasks; without it, the build can fail with `MSB4036` when loading `ReadAssetsJson`.
+
+From an ARM64 Native Tools Command Prompt, run the following in the repository root:
+
+```cmd
+msbuild openrct2.proj /t:Build /p:Platform=arm64 /p:Configuration=Release /m:4
+```
+
+The first build downloads dependencies and generates graphics. Run the game with `bin\openrct2.exe`.
+
+### Experimental generated guest thoughts
+
+This branch enables embedded guest thoughts by default for Windows ARM64. It uses the existing
+`..\llama.cpp-builds\d775b896-windows-arm64-cuda-13.4\bin` runtime and the installed ARM64 CUDA 13.4
+cuBLAS libraries; it does not compile a replacement llama.cpp. Override the runtime location with
+`/p:GuestThoughtRuntime="C:\path\to\the\pinned\runtime\bin"`.
+
+Build setup verifies the pinned runtime DLLs, downloads matching headers and the official
+Qwen2.5-1.5B-Instruct Q8_0 model, and verifies their SHA256 checksums from `guest-thoughts.json`.
+The model occupies approximately 1.9 GB in `bin\models`; DLLs and license notices are prepared
+in `bin\guest-thoughts`. These generated dependencies are not committed. Subsequent unchanged
+MSBuild builds do not redownload them.
+
+Open a guest's **Thoughts** tab to generate a state-conditioned English reflection automatically.
+Only open Thoughts tabs request inference. The runtime uses CUDA first, including integrated
+CUDA devices, with a logged CPU fallback for recoverable failures. Text is limited to 16 words,
+96 Unicode characters, and three rendered lines. Generated text replaces the displayed native list,
+with `Thinking...` while pending; the engine's internal thoughts and simulation behavior are unchanged.
+Inference never downloads files or calls a network service; missing dependencies or
+rejected output show `Thoughts unavailable` while the native thoughts remain usable.
+
+The `[interface]` section of `config.ini` supports `guest_thoughts = false` to disable generation,
+`guest_thought_model` to override the GGUF path, and `guest_thought_force_cpu = true` for diagnostics.
+To build without the feature or its provisioning, append `/p:EnableGuestThoughts=false`.
+Other Windows architectures default to disabled. CMake exposes `ENABLE_GUEST_THOUGHTS` and
+`GUEST_THOUGHT_RUNTIME` for the equivalent ARM64 UI build.
+
+To try this branch on another machine, use the Windows ARM64 build instructions above and supply
+the exact pinned `d775b896` ARM64 CUDA runtime's `bin` directory with `/p:GuestThoughtRuntime=...`
+if it is not in the default sibling directory. The feature requires the ARM64 CUDA 13.4 cuBLAS
+libraries installed by the CUDA toolkit, even when forcing CPU inference. The runtime checksums
+are recorded in `guest-thoughts.json`; arbitrary llama.cpp builds are not interchangeable.
+Model weights, runtime DLLs, game assets, and build outputs are not included in git.
+The first build needs network access to provision dependencies; the running game does not.
+The native MSBuild build is verified on Windows ARM64; the CMake integration is experimental
+and has not been validated end-to-end.
+
+Model-free regression tests run with `tests.exe` from the `bin` working directory. The optional embedded model
+checks require the prepared dependencies:
+
+```cmd
+cd bin
+tests.exe --gtest_filter=GuestThoughtModel.* --gtest_also_run_disabled_tests
+```
+
+The llama.cpp runtime carries its MIT notice, Qwen its Apache 2.0 notice, and OpenMP its LLVM
+notice. CUDA libraries retain NVIDIA's separate license terms. This is a local experimental
+setup, not a redistribution bundle; review all component and game license requirements before
+distributing binaries. A tiny model can still produce inaccurate text; deterministic validation
+rejects common contradictions but is not a general factuality guarantee.
+
 ---
 
 # 4. Contributing

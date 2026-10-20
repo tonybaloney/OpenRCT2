@@ -132,6 +132,9 @@ namespace OpenRCT2::Config
 
     struct Interface
     {
+        bool guestThoughts;
+        u8string guestThoughtModel;
+        bool guestThoughtForceCpu;
         bool toolbarButtonsCentred;
         bool toolbarShowFinances;
         bool toolbarShowResearch;

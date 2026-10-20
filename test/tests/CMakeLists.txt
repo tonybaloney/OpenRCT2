@@ -15,6 +15,9 @@ set(test_files
    "${CMAKE_CURRENT_SOURCE_DIR}/Endianness.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/EnumMapTest.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/FormattingTests.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/GuestNarrativeTests.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/GuestThoughtServiceTests.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/GuestThoughtModelTests.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/ImageImporterTests.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/IniReaderTest.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/IniWriterTest.cpp"
@@ -43,10 +46,15 @@ set(test_files
 add_executable(OpenRCT2Tests ${test_files})
 add_executable(OpenRCT2::OpenRCT2Tests ALIAS OpenRCT2Tests)
 
+if (ENABLE_GUEST_THOUGHTS)
+    target_sources(OpenRCT2Tests PRIVATE "${ROOT_DIR}/src/openrct2-ui/guest/LlamaGuestThoughtBackend.cpp")
+    target_compile_definitions(OpenRCT2Tests PRIVATE ENABLE_GUEST_THOUGHTS)
+    target_include_directories(OpenRCT2Tests PRIVATE "${ROOT_DIR}/lib/guest-thoughts/include")
+endif ()
+
 target_link_libraries(OpenRCT2Tests GTest::gtest GTest::gtest_main libopenrct2)
 target_include_directories(OpenRCT2Tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../src")
 set_target_properties(OpenRCT2Tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 gtest_discover_tests(OpenRCT2Tests
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     DISCOVERY_MODE PRE_TEST)
-

@@ -204,6 +204,8 @@ namespace OpenRCT2
         uint8_t fresh_timeout; // updates every tick
     };
 
+    RideId GetPeepThoughtRideId(const PeepThought& thought);
+
     struct IntensityRange
     {
     private:

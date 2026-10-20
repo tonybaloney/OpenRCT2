@@ -447,6 +447,8 @@
     <ClInclude Include="park\ParkFile.h" />
     <ClInclude Include="park\ParkPreview.h" />
     <ClInclude Include="peep\Guest.h" />
+    <ClInclude Include="peep\GuestNarrative.h" />
+    <ClInclude Include="peep\GuestThoughtService.h" />
     <ClInclude Include="peep\GuestPathfinding.h" />
     <ClInclude Include="peep\PeepActionFormat.h" />
     <ClInclude Include="peep\PeepAnimations.h" />
@@ -1156,6 +1158,8 @@
     <ClCompile Include="park\ParkPreview.cpp" />
     <ClCompile Include="peep\GuestPathfinding.cpp" />
     <ClCompile Include="peep\PeepActionFormat.cpp" />
+    <ClCompile Include="peep\GuestNarrative.cpp" />
+    <ClCompile Include="peep\GuestThoughtService.cpp" />
     <ClCompile Include="peep\PeepAnimations.cpp" />
     <ClCompile Include="peep\PeepThoughts.cpp" />
     <ClCompile Include="peep\RideUseSystem.cpp" />

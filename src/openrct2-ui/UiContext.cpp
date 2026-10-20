@@ -14,6 +14,7 @@
 #include "TextComposition.h"
 #include "WindowManager.h"
 #include "drawing/engines/DrawingEngineFactory.hpp"
+#include "guest/LlamaGuestThoughtBackend.h"
 #include "input/ShortcutManager.h"
 #include "interface/Chat.h"
 #include "interface/InGameConsole.h"
@@ -35,6 +36,7 @@
 #include <openrct2/audio/AudioContext.h>
 #include <openrct2/audio/AudioMixer.h>
 #include <openrct2/config/Config.h>
+#include <openrct2/core/Path.hpp>
 #include <openrct2/core/String.hpp>
 #include <openrct2/drawing/Drawing.Screen.h>
 #include <openrct2/drawing/Drawing.h>
@@ -43,6 +45,8 @@
 #include <openrct2/drawing/RenderTarget.h>
 #include <openrct2/interface/ScreenCoords.hpp>
 #include <openrct2/interface/Viewport.h>
+#include <openrct2/peep/GuestThoughtService.h>
+#include <openrct2/platform/Platform.h>
 #include <openrct2/scenes/title/TitleSequencePlayer.h>
 #include <openrct2/ui/UiContext.h>
 #include <openrct2/ui/WindowManager.h>
@@ -96,8 +100,33 @@ private:
 
     InGameConsole _inGameConsole;
     std::unique_ptr<ITitleSequencePlayer> _titleSequencePlayer;
+    std::unique_ptr<GuestThoughtService> _guestThoughts;
+    bool _closing = false;
 
 public:
+    GuestThoughtService* GetGuestThoughtService()
+    {
+#ifdef ENABLE_GUEST_THOUGHTS
+        if (!_closing && Config::Get().interface.guestThoughts)
+        {
+            if (!_guestThoughts)
+            {
+                const auto directory = Path::GetDirectory(Platform::GetCurrentExecutablePath());
+                const auto runtime = Path::Combine(directory, "guest-thoughts");
+                const auto& overridePath = Config::Get().interface.guestThoughtModel;
+                const auto model = overridePath.empty()
+                    ? Path::Combine(directory, "models", "qwen2.5-1.5b-instruct-q8_0.gguf")
+                    : overridePath;
+                const auto forceCpu = Config::Get().interface.guestThoughtForceCpu;
+                _guestThoughts = std::make_unique<GuestThoughtService>(
+                    [runtime, model, forceCpu] { return CreateLlamaGuestThoughtBackend(runtime, model, forceCpu); });
+            }
+            return _guestThoughts.get();
+        }
+#endif
+        return nullptr;
+    }
+
     InGameConsole& GetInGameConsole()
     {
         return _inGameConsole;
@@ -129,6 +158,8 @@ public:
 
     ~UiContext() override
     {
+        _closing = true;
+        _guestThoughts.reset();
         UiContext::CloseWindow();
         SDL_QuitSubSystem(SDL_INIT_VIDEO);
     }
@@ -1104,4 +1135,10 @@ ShortcutManager& Ui::GetShortcutManager()
 {
     auto& uiContext = static_cast<UiContext&>(GetContext()->GetUiContext());
     return uiContext.GetShortcutManager();
+}
+
+GuestThoughtService* Ui::GetGuestThoughtService()
+{
+    auto& uiContext = static_cast<UiContext&>(GetContext()->GetUiContext());
+    return uiContext.GetGuestThoughtService();
 }
