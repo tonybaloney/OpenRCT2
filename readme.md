@@ -332,6 +332,27 @@ explicitly synthetic, temporary fixtures, never the presented evaluation data.
 and `slide-2.png`, plus `eval-data.json`, into an image-based two-slide PowerPoint
 using Python's standard library.
 
+The 25 October 2026 local capture completed 4,435 decisions across the four
+five-minute model runs:
+
+| Treatment | Actual redirects | Unchanged confirmations | Low-confidence fallback |
+| --- | ---: | ---: | ---: |
+| D3-Lite / original | 122 (11.2%) | 348 (31.8%) | 610 (55.8%) |
+| D3-Lite / neutral | 278 (25.0%) | 3 (0.3%) | 827 (74.4%) |
+| D3-Edge / original | 32 (2.9%) | 381 (34.2%) | 698 (62.6%) |
+| D3-Edge / neutral | 39 (3.5%) | 5 (0.4%) | 1,072 (96.1%) |
+
+Rates use completed decisions; stale results account for the remainder.
+Neutral-prompt frozen-input interventions were exactly invariant in 58 Lite
+and 44 Edge samples. Removing the shortcut eliminated most unchanged
+confirmations but increased low-confidence fallback under the unchanged gate;
+it is not a general decision-quality fix. All native baselines matched exactly.
+This is one park and one run per treatment, with asynchronous inference.
+An incremental build attempt overlapped part of the original Lite treatment;
+queue-inclusive timing and live outcome differences are not isolated speed or
+causal quality benchmarks. The report records that environment caveat alongside
+the unmodified traces and matched-input interventions.
+
 After building the test executable and installing the chosen decision model, run:
 
 ```powershell

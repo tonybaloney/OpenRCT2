@@ -42,7 +42,7 @@ button:hover,.button:hover{background:#eadbb2}button:active,.button:active{borde
   <div class="graph-controls"><label for="metric">Plot <select id="metric"><option value="mean_happiness">Mean happiness (0-255)</option><option value="park_rating">Park rating (0-999)</option><option value="hungry">Hungry guests (count)</option><option value="thirsty">Thirsty guests (count)</option><option value="sick">Sick guests (count)</option><option value="queuing">Queuing guests (count)</option><option value="cash_raw_tenths">Park cash (GBP)</option><option value="ride_customers">Additional ride customers</option><option value="shop_customers">Additional shop customers</option></select></label><span class="small muted">5-second steps / hover or tap</span></div>
   <div class="graph-well"><canvas class="chart" id="telemetry" width="800" height="265" role="img" aria-label="Park metrics over time, with native baseline and four D3 treatments"></canvas></div>
   <div class="legend" id="legend"></div><div class="chart-readout" id="chart-readout" aria-live="polite">The native baseline is re-run for every treatment and matches exactly.</div>
-  <p class="small muted">Shared initial state and RNG. Live D3 inference is asynchronous; these curves are observations, not proof of a model-quality gain.</p>
+  <p class="small muted">Auto-scaled Y axis; read numeric ticks. Shared initial state and RNG. Live D3 inference is asynchronous; these curves are observations, not proof of a model-quality gain.</p>
  </div></section>
  <section class="window"><div class="titlebar"><h2>Did D3 take the wheel?</h2><span class="caps">Completed only</span></div><div class="body">
   <div class="outcome-key"><span><i class="swatch redirect"></i> Redirect</span><span><i class="swatch unchanged"></i> Same target</span><span><i class="swatch fallback"></i> Low confidence</span><span><i class="swatch stale"></i> Stale</span></div>
@@ -65,6 +65,7 @@ button:hover,.button:hover{background:#eadbb2}button:active,.button:active{borde
 </div></section>
 <section class="window"><div class="titlebar"><h2>Research notebook / reproducibility</h2><span class="caps">No victory laps</span></div><div class="body">
  <p class="small">One populated Blackpool park, one initial RNG state, one run per treatment. No confidence intervals or statistical-significance claims. Park metrics are population aggregates; guest membership can change. Frozen-input ablations test prompt sensitivity, not counterfactual park performance.</p>
+ <div id="environment-notes" class="small"></div>
  <p class="small"><b>Default gameplay is unchanged.</b> The B prompt is explicitly selected by the evaluation runner on branch <code>ab/d3-incumbent-neutral</code>. Models remain CUDA classifiers; they do not replace native pathfinding, payments or ride operations.</p>
  <p class="small"><a href="eval-data.json" download>Download embedded data + evidence hashes</a> / <a href="suite.json" download>Suite provenance</a> / <a href="README.txt">Run notes</a></p>
  <details><summary>Exact evaluation commands</summary><pre>.\scripts\run-d3-eval-suite.ps1 -Seconds 300
@@ -87,7 +88,7 @@ node .\scripts\build-d3-eval-dashboard.mjs .\bin\d3-eval-suite-20261025 .\bin\d3
  <article class="slide" id="slide-2">
   <div class="slide-title"><span>D3 PARK LAB / 02 - D3 + A/B EVALUATION</span><span>Lite vs Edge / original vs neutral</span></div>
   <div class="slide-content"><div class="caps eyebrow">Remove the shortcut. Keep the safety net.</div><h1>Four treatments. Honest outcomes.</h1><p class="subtitle">B removes incumbent hints only. Same candidates, 45% top score, 8pp margin and main-thread revalidation.</p>
-   <div class="slide-columns"><div id="slide-d3-diagram"></div><div><div class="window"><div class="titlebar"><span id="slide-duration">Completed decisions</span></div><div class="body"><div class="outcome-key"><span><i class="swatch redirect"></i> Redirect</span><span><i class="swatch unchanged"></i> Same</span><span><i class="swatch fallback"></i> Low conf.</span><span><i class="swatch stale"></i> Stale</span></div><div id="slide-outcomes"></div><div class="comparison-chips" id="slide-chips"></div></div></div><div class="callout" id="slide-conclusion"></div><p class="small">Identical imported state/RNG and repeated native baselines. One park / one run per treatment; not a statistical or long-term performance claim.</p></div></div>
+   <div class="slide-columns"><div id="slide-d3-diagram"></div><div><div class="window"><div class="titlebar"><span id="slide-duration">Completed decisions</span></div><div class="body"><div class="outcome-key"><span><i class="swatch redirect"></i> Redirect</span><span><i class="swatch unchanged"></i> Same</span><span><i class="swatch fallback"></i> Low conf.</span><span><i class="swatch stale"></i> Stale</span></div><div id="slide-outcomes"></div><div class="comparison-chips" id="slide-chips"></div></div></div><div class="callout" id="slide-conclusion"></div><p class="small">Identical imported state/RNG and repeated native baselines. One park / one run per treatment; not a statistical or long-term performance claim. Shared-machine timing is not an isolated benchmark.</p></div></div>
   </div><div class="slide-footer"><span id="slide-source"></span><span>Native pathfinding and simulation remain authoritative.</span></div>
  </article>
 </section>
@@ -103,7 +104,7 @@ let selected = D.runs[0];
 const enabled = new Set(D.runs.map(run => run.id));
 const total = D.runs.reduce((sum, run) => sum + run.completed, 0);
 const seconds = D.suite.seconds_per_variant;
-const dateLabel = new Date(D.suite.completed_utc).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric",timeZone:"UTC"});
+const dateLabel = new Date(D.suite.completed_utc).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric",timeZone:"UTC"})+" UTC";
 $("run-badge").textContent = `Blackpool / ${seconds}s / 40 ticks per second / ${dateLabel}`;
 $("slide-duration").textContent = `Completed decisions / ${seconds<60?seconds+" seconds":num(seconds/60,seconds%60?1:0)+" minutes"} per treatment`;
 $("status-left").textContent = "OPEN: 4 treatments / matching initial state + RNG / native baselines verified";
@@ -153,6 +154,7 @@ if (historical) {
 }
 $("provenance").textContent = `Eval ${D.suite.source_revision.slice(0,10)} / park ${D.suite.park_sha256.slice(0,10)}`;
 $("slide-source").textContent = `${dateLabel} / eval ${D.suite.source_revision.slice(0,10)} / ${seconds}s per variant / single park`;
+$("environment-notes").innerHTML = (D.environment_notes||[]).map(note=>`<p><b>Environment note:</b> ${esc(note)}</p>`).join("");
 $("legend").innerHTML = `<span><i class="swatch" style="background:#e7d6ad"></i> Native baseline</span>` + D.runs.map(run => `<label><input type="checkbox" data-toggle="${run.id}" checked><i class="swatch" style="background:${run.color}"></i>${esc(run.label)}</label>`).join("");
 document.querySelectorAll("[data-toggle]").forEach(input => input.addEventListener("change",()=>{input.checked?enabled.add(input.dataset.toggle):enabled.delete(input.dataset.toggle);drawChart();}));
 const metricLabel = () => $("metric").selectedOptions[0].textContent;

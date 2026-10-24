@@ -29,6 +29,12 @@ const colors = ["#48b8f0", "#f4bd46", "#de83ed", "#7ed175"];
 let initial;
 let nativeReference;
 const manifest = [];
+const notesPath = path.join(suiteDirectory, "operator-notes.json");
+const environmentNotes = fs.existsSync(notesPath) ? readJson(notesPath).notes : [];
+assert.ok(Array.isArray(environmentNotes) && environmentNotes.every(note => typeof note === "string"));
+if (fs.existsSync(notesPath)) {
+    manifest.push({ source: notesPath, target: path.join("results", "operator-notes.json"), sha256: hash(notesPath) });
+}
 const runs = suite.runs.map((id, index) => {
     const directory = path.join(suiteDirectory, id);
     const comparison = readJson(path.join(directory, "comparison.json"));
@@ -77,6 +83,15 @@ const runs = suite.runs.map((id, index) => {
         assert.equal(metrics.length, suite.seconds_per_variant + 1);
         assert.equal(metrics.at(-1).tick - metrics[0].tick, suite.seconds_per_variant * 40);
     }
+    const withoutElapsed = row => Object.fromEntries(Object.entries(row).filter(([key]) => key !== "elapsed_seconds"));
+    for (const [part, metrics] of [[comparison.model_on, modelMetrics], [comparison.native_off, nativeMetrics]]) {
+        assert.deepEqual(withoutElapsed(part.start), withoutElapsed(metrics[0]));
+        assert.deepEqual(withoutElapsed(part.end), withoutElapsed(metrics.at(-1)));
+        for (const [key, expected] of Object.entries(part.time_mean)) {
+            assert.ok(Math.abs(mean(metrics.slice(1).map(row => row[key])) - expected) < 0.000001,
+                `${id}: ${key} time mean does not match the raw samples`);
+        }
+    }
     if (!nativeReference) nativeReference = nativeMetrics;
     assert.deepEqual(nativeMetrics, nativeReference, `${id}: native baseline is not identical`);
     const samples = readLines(path.join(directory, "incumbent-ablation.jsonl"));
@@ -112,8 +127,8 @@ const runs = suite.runs.map((id, index) => {
         latency_p95_ms: percentile(completed.map(event => event.elapsed_ms), 0.95),
         matched_ablation_max_difference: matchedAblationMaxDifference,
         series: modelMetrics.map((row, second) => ({ ...row, elapsed_seconds: second })),
-        examples: completed.filter(event => event.outcome === "applied").slice(0, 3)
-            .concat(completed.filter(event => event.outcome === "low_confidence").slice(0, 3))
+        examples: ["applied", "unchanged", "low_confidence", "stale"]
+            .flatMap(outcome => completed.filter(event => event.outcome === outcome).slice(0, 2))
             .map(event => ({
                 guest_id: event.guest_id, outcome: event.outcome, confidence: event.confidence,
                 margin: event.margin, incumbent_id: event.incumbent_id, winner_id: event.winner_id,
@@ -131,7 +146,7 @@ if (historicalDirectory) {
     }
 }
 const data = {
-    schema: 1, suite, runs, historical,
+    schema: 1, suite, runs, historical, environment_notes: environmentNotes,
     native: nativeReference.map((row, second) => ({ ...row, elapsed_seconds: second })),
     evidence: {
         initial_state_identical: true, native_metrics_identical: true,
@@ -192,6 +207,7 @@ fs.writeFileSync(path.join(outputDirectory, "README.txt"), [
     "Per-second park metrics are population aggregates; treatment can change which guests remain.",
     "Queue-inclusive decision latency is not pure model-forward latency.",
     "Historical results (if present) are from 20 October 2026 and are separate from the fresh evaluation.", "",
+    ...(environmentNotes.length ? ["ENVIRONMENT NOTES", ...environmentNotes, ""] : []),
     "PROVENANCE",
     "eval-data.json embeds report data and SHA256 checksums for all included raw evidence.",
     "results contains full model traces, native/model metrics, analyses, frozen-input ablations and test outputs.",
