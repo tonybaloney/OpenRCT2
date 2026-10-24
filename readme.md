@@ -313,6 +313,25 @@ each paired with a freshly reloaded native baseline. Allow at least 40 minutes
 for the four five-minute native/model pairs, plus loading and frozen-input
 ablation checks. All four runs must match the same initial state and RNG.
 
+Build the offline pixel-style dashboard and two HTML presentation slides from
+a finished suite (choose a new output directory):
+
+```powershell
+node .\scripts\build-d3-eval-dashboard.mjs .\bin\d3-eval-suite-20261025 .\bin\d3-park-lab .\bin\guest-decision-comparison-20261020
+```
+
+The final argument optionally adds the earlier incumbent-bias evidence; omit it
+if unavailable. The output includes full raw evidence and hashes, not just
+charts. Open `dashboard.html` or `slides.html` without a web server; slide arrows
+and Print/PDF work offline. The dashboard distinguishes actual redirects,
+unchanged confirmations, low-confidence fallbacks and stale results. Its pixel
+art and bevel treatment are original, not extracted game assets.
+`node .\test\tests\d3-eval-dashboard.test.mjs` checks the report builder using
+explicitly synthetic, temporary fixtures, never the presented evaluation data.
+`scripts\export-d3-slides.py` can package 1280x720 browser-rendered `slide-1.png`
+and `slide-2.png`, plus `eval-data.json`, into an image-based two-slide PowerPoint
+using Python's standard library.
+
 After building the test executable and installing the chosen decision model, run:
 
 ```powershell

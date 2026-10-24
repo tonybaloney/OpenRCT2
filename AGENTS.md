@@ -130,6 +130,9 @@ remove incumbent-target hints from the model prompt only. Confidence and safety
 gates remain unchanged, and normal gameplay retains the original prompt.
 `.\scripts\run-d3-eval-suite.ps1 -Seconds 300` runs both D3 models with both
 prompts and a fresh native baseline for each (at least 40 minutes total).
+The finished suite can be passed to `scripts\build-d3-eval-dashboard.mjs` to
+generate the offline pixel dashboard, two HTML slides and hashed raw evidence.
+See the README for the command and the optional image-based PowerPoint exporter.
 
 Add `-Park "C:\parks\demo.park"` to use a different saved park. The script reloads
 the same starting state for each variant and writes reports/traces beneath a

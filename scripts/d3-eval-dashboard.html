@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>D3 Park Lab | Guest Decision Evaluations</title>
+<style>
+:root{--ink:#252025;--cream:#f3e8c6;--panel:#d5c49c;--light:#fff4cf;--shadow:#806f55;--purple:#603a74;--purple-light:#9972aa;--green:#436c3a;--native:#e7d6ad;--blue:#48b8f0;--yellow:#f4bd46;--pink:#de83ed;--mint:#7ed175;--red:#b5403d}
+*{box-sizing:border-box}body{margin:0;background:#294d35;color:var(--ink);font:14px/1.5 "Consolas","Courier New",monospace;background-image:linear-gradient(45deg,#ffffff04 25%,transparent 25%,transparent 75%,#ffffff04 75%),linear-gradient(45deg,#ffffff04 25%,transparent 25%,transparent 75%,#ffffff04 75%);background-size:12px 12px;background-position:0 0,6px 6px}
+button,select,a,input{font:inherit}button,select,.button{border:2px solid;border-color:var(--light) var(--shadow) var(--shadow) var(--light);background:var(--panel);color:var(--ink);padding:7px 12px;text-decoration:none;cursor:pointer;display:inline-block;font-weight:bold}
+button:hover,.button:hover{background:#eadbb2}button:active,.button:active{border-color:var(--shadow) var(--light) var(--light) var(--shadow)}button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid #146ca7;outline-offset:3px}button[aria-pressed=true]{background:var(--cream);border-color:var(--shadow) var(--light) var(--light) var(--shadow)}a{color:#3f2461}p{margin:8px 0}h1,h2,h3{line-height:1.2;margin:0}h1{font-size:clamp(25px,4vw,43px);letter-spacing:-1.4px}h2{font-size:18px}h3{font-size:15px}.small{font-size:12px}.muted{color:#5f5148}.caps{text-transform:uppercase;letter-spacing:1.6px;font-size:11px;font-weight:bold}.wrap{max-width:1420px;margin:auto;padding:22px 24px 32px}.window{background:var(--panel);border:2px solid;border-color:#f8eac0 #3f352e #3f352e #f8eac0;box-shadow:4px 4px 0 #142d27;margin-top:18px}
+.titlebar{background:linear-gradient(90deg,#56336c,#80528b);border:1px solid #af86ba;color:#fff5dd;padding:5px 8px;display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:bold;letter-spacing:.3px}.window-controls{display:flex;gap:3px}.window-controls span{background:#b99bc2;border:1px solid #e4cee9;color:#402d4b;font-size:11px;line-height:15px;min-width:17px;text-align:center}.body{padding:16px}.hero{position:relative;overflow:hidden;background:#f1e5bf;display:grid;grid-template-columns:1.5fr 1fr;gap:16px;min-height:188px}.hero-copy{position:relative;z-index:1}.hero p{max-width:660px}.eyebrow{color:#6d387e;margin-bottom:8px}.badge{display:inline-block;background:#ebdfb8;border:1px solid #ae996e;padding:2px 7px;font-size:11px;font-weight:bold}.hero-art{min-height:155px;width:100%;align-self:end}.toolbar{display:flex;gap:8px;flex-wrap:wrap;padding:9px;background:#b7a47c;border-bottom:2px solid #7f6a4a}.statusbar{background:#b4c39a;border-top:2px solid #f8edc7;padding:7px 12px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;font-size:11px}
+.statgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:18px 0}.stat{background:var(--cream);border:2px solid;border-color:#96815c #fff2cd #fff2cd #96815c;padding:13px 15px}.stat strong{display:block;font-size:29px;font-weight:bold;line-height:1.2}.stat .caps{margin-bottom:5px;display:block}.stat em{font-style:normal;font-size:11px;color:#6b5848}.grid-two{display:grid;grid-template-columns:1.5fr 1fr;gap:18px}.grid-two .window{margin-top:0}.well{border:2px solid;border-color:#927a58 #f7ebc6 #f7ebc6 #927a58;background:#eee2bb;padding:12px}.graph-well{background:#283e37;padding:8px;border:2px solid;border-color:#71664f #fff0c5 #fff0c5 #71664f}.chart{display:block;width:100%;height:auto;image-rendering:pixelated;touch-action:pan-y}.graph-controls{display:flex;align-items:center;gap:9px;justify-content:space-between;flex-wrap:wrap;margin-bottom:10px}.graph-controls select{max-width:100%;padding:4px 6px}.legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:9px;font-size:11px}.legend label{cursor:pointer;display:flex;align-items:center;gap:4px}.swatch{display:inline-block;width:10px;height:10px;border:1px solid #342c2e;flex-shrink:0}.chart-readout{min-height:35px;background:#c5b38b;font-size:11px;padding:5px 8px;margin-top:8px}.outcome-key{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;margin-bottom:13px}.outcome-row{margin:14px 0}.outcome-head{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px}.stack{height:19px;display:flex;border:1px solid #574a39;background:#aa9a78}.stack span{display:block;min-width:0}.redirect{background:#3f8c62}.unchanged{background:#689ed1}.fallback{background:#d99a42}.stale{background:#b65f68}.callout{border-left:5px solid #9c4c45;background:#f7e6c0;padding:10px 12px;margin-top:12px;font-size:12px}.callout strong{color:#8e3636}.rowlink{background:none;border:0;padding:0;text-align:left;text-decoration:underline;font-size:12px}.table-scroll{overflow:auto}table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}th{text-align:right;background:#b19a71;border:1px solid #7e694a;padding:8px;white-space:nowrap}th:first-child,td:first-child{text-align:left}td{text-align:right;padding:9px 8px;border-bottom:1px solid #ac9872;white-space:nowrap}tbody tr:nth-child(even){background:#dfd0a9}tbody tr.selected{background:#f5e9bf;outline:2px solid #8b599e;outline-offset:-2px}caption{text-align:left;padding-bottom:9px;font-size:11px}.confidence-layout{display:grid;grid-template-columns:1.1fr 1fr;gap:18px}.confidence-row{margin-bottom:12px}.confidence-label{font-size:11px;margin-bottom:4px}.dual-bar{height:14px;background:#b9a47a;border:1px solid #84704e;margin-top:3px;position:relative}.dual-bar span{display:block;height:100%}.confidence-values{display:flex;justify-content:space-between;font-size:11px}.lab-note{font-size:12px}.lab-note ol{margin:8px 0;padding-left:23px}.lab-note li{margin:6px 0}.pill{display:inline-block;font-size:10px;padding:2px 5px;background:#e7d6ac;border:1px solid #a38a5c}.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}details{margin-top:10px}summary{cursor:pointer;font-weight:bold;font-size:12px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.5 "Consolas",monospace;background:#f5ebcf;border:1px solid #ab946d;padding:10px;max-height:340px;overflow:auto}.trace-options{font-size:11px;display:grid;gap:5px;margin:8px 0}.option-bar{height:8px;background:#b9a67f}.option-bar span{height:100%;display:block;background:#8d6ca0}.trace-head{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}.diagram-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.diagram{width:100%;height:auto;display:block;background:#eee3bd}.diagram text{font-family:Consolas,"Courier New",monospace;fill:#302934;font-size:14px}.diagram .node{fill:#faf0ce;stroke:#927e5f;stroke-width:2;shape-rendering:crispEdges}.diagram .model{fill:#e7c8eb;stroke:#82578c}.diagram .gate{fill:#f5d18b;stroke:#9d7944}.diagram .safe{fill:#c5dbb0;stroke:#6f8958}.diagram .arrow{fill:none;stroke:#715b78;stroke-width:2;marker-end:url(#arrowNative)}.diagram.d3 .arrow{marker-end:url(#arrowD3)}.diagram .label{font-size:11px;fill:#6a524f}.footnotes{font-size:11px;color:#efdfb7;margin-top:20px}.footnotes a{color:#fff0cb}footer{color:#cecca9;font-size:10px;display:flex;justify-content:space-between;gap:14px;margin-top:18px;flex-wrap:wrap}.hidden{display:none!important}
+.slide-toolbar{max-width:1280px;margin:18px auto 10px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 12px;color:#f6e7bd;flex-wrap:wrap}.slide-toolbar a{color:#fff0cd}.slide{width:1280px;height:720px;max-width:100%;margin:0 auto 20px;background:var(--cream);border:3px solid #503b57;box-shadow:6px 6px 0 #122d24;overflow:hidden;display:grid;grid-template-rows:38px 1fr 29px}.slide-title{padding:7px 16px;font-size:13px;color:#fff0d8;background:#633c76;font-weight:bold;display:flex;justify-content:space-between}.slide-content{padding:23px 30px;overflow:hidden}.slide h1{font-size:35px;letter-spacing:-1px}.slide .subtitle{font-size:13px;color:#6f5b4d;margin-top:7px}.slide-columns{display:grid;grid-template-columns:1.15fr 1fr;gap:24px;margin-top:17px}.slide .diagram{height:404px;object-fit:contain;background:#e8dab0;border:2px solid #b29a71}.slide .window{margin:0;box-shadow:3px 3px 0 #b1a080}.slide .body{padding:13px}.slide .slide-note{font-size:13px;margin:0 0 14px}.slide .mini-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}.slide .mini-stats .stat{padding:10px}.slide .mini-stats strong{font-size:28px}.slide-footer{background:#c7b58d;border-top:2px solid #fff0c9;padding:5px 14px;display:flex;justify-content:space-between;gap:8px;font-size:10px}.slide .comparison-chips{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px}.slide .chip{border:1px solid #a48a65;background:#f7eccb;padding:7px;font-size:11px}.slide .chip b{font-size:17px;display:block}.slide .callout{font-size:12px;margin-top:10px}.slide .outcome-row{margin:9px 0}.slide .stack{height:15px}.slide .outcome-head{font-size:11px}.slide .caps{font-size:10px}.slide .diagram text{font-size:14px}.slide .diagram .label{font-size:11px}.slide .slide-thesis{background:#f9edcd;border:2px solid #b89d6d;margin-top:13px;padding:9px 12px;font-size:13px;font-weight:bold}.slide-pager{display:flex;align-items:center;gap:8px}
+@media(min-width:850px){body[data-view=slides] .slide:not(.active){display:none}}
+@media(max-width:1000px){.grid-two,.confidence-layout{grid-template-columns:1fr}.statgrid{grid-template-columns:1fr 1fr}.hero{grid-template-columns:1fr}.hero-art{display:none}.slide{height:auto;min-height:720px}.slide-columns{grid-template-columns:1fr}.slide .diagram{height:350px}.slide-content{overflow:visible}.slide .slide-thesis{margin-bottom:15px}.slide{overflow:visible}.slide h1{font-size:28px}.slide .slide-columns{gap:14px}.slide .slide-footer{font-size:9px}.slide-toolbar{padding:0 18px}}
+@media(max-width:650px){.wrap{padding:10px}.body{padding:11px}.statgrid{gap:8px}.stat{padding:10px}.stat strong{font-size:25px}.diagram-grid,.detail-grid{grid-template-columns:1fr}.titlebar{font-size:11px}.hero h1{font-size:28px}.slide-content{padding:16px}.slide h1{font-size:25px}.slide-title{font-size:11px}.slide-footer{flex-wrap:wrap;height:auto}.slide{grid-template-rows:38px 1fr auto}.slide .mini-stats strong{font-size:24px}}
+@page{size:13.333in 7.5in;margin:0}
+@media print{body{background:white!important}#dashboard,.slide-toolbar{display:none!important}#slides{display:block!important}.slide,.slide:not(.active){display:grid!important;width:1280px!important;max-width:none!important;height:720px!important;min-height:0!important;margin:0!important;box-shadow:none!important;border:0!important;break-after:page;page-break-after:always;grid-template-rows:38px 1fr 29px!important;overflow:hidden!important}.slide:last-child{break-after:auto;page-break-after:auto}.slide-content{padding:23px 30px!important;overflow:hidden!important}.slide-columns{grid-template-columns:1.15fr 1fr!important;gap:24px!important}.slide h1{font-size:35px!important}.slide .diagram{height:404px!important}.slide-footer{font-size:10px!important;flex-wrap:nowrap!important}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style>
+</head>
+<body data-view="__D3_VIEW__">
+<main id="dashboard" class="wrap">
+<div class="window" style="margin-top:0">
+ <div class="titlebar"><span>Guest Research Department - D3 Park Lab</span><span class="window-controls" aria-hidden="true"><span>_</span><span>+</span><span>x</span></span></div>
+ <div class="toolbar"><button id="overview-button" aria-pressed="true">Park overview</button><a class="button" href="#confidence-window">Confidence lab</a><a class="button" href="#architecture-window">Decision maps</a><a class="button" href="slides.html">2-slide briefing &gt;</a></div>
+ <header class="body hero">
+  <div class="hero-copy"><div class="caps eyebrow">Four treatments. One park. No magic confidence.</div><h1>Small models.<br>Big park decisions.</h1><p>Watch D3-Lite and D3-Edge choose destinations, then ask the important question: <b>did the model actually change anything?</b></p><span class="badge" id="run-badge">Loading verified results...</span> <span class="badge">Offline / no telemetry</span></div>
+  <svg class="hero-art" viewBox="0 0 420 165" aria-label="Original pixel-art roller coaster illustration" role="img" shape-rendering="crispEdges">
+   <path fill="#c8d9c3" d="M0 0h420v165H0z"/><path fill="#edf0d0" d="M18 20h52v10H18zm15-9h24v31H33zm260 4h67v10h-67zm18-8h29v24h-29z"/><path fill="#71945a" d="M0 128h420v37H0z"/><path fill="#8ca866" d="M0 137h420v12H0z"/><path fill="#d0bd8d" d="M20 151h360v9H20z"/>
+   <path fill="none" stroke="#9a775e" stroke-width="5" d="M53 127V58m42 69V76m42 51V114m42 13V78m42 49V29m42 98V49m42 78V100m42 27V79m42 48V58"/>
+   <path fill="none" stroke="#523c6d" stroke-width="8" d="M0 110h20l33-57h18l49 64h32l59-94h22l62 84h21l44-51h60"/><path fill="none" stroke="#ac8fbd" stroke-width="3" d="M0 104h20l33-57h18l49 64h32l59-94h22l62 84h21l44-51h60"/>
+   <g fill="#dc9d3e" stroke="#58413a" stroke-width="2"><path d="M206 9h16v12h-16zm19 0h16v12h-16zm19 8h16v12h-16z"/></g><g fill="#58413a"><path d="M208 23h5v5h-5zm12 0h5v5h-5zm10 0h5v5h-5zm12 0h5v5h-5z"/></g><path fill="#365f41" d="M365 115h23l-12-27zm9 9h5v14h-5zM11 125h23l-12-27zm9 0h5v14h-5z"/>
+  </svg>
+ </header>
+ <div class="statusbar"><span id="status-left">Checking eval data</span><span>Gate: top &ge; 45% / margin &ge; 8pp</span></div>
+</div>
+<section class="statgrid" aria-label="Evaluation summary" id="summary-stats"></section>
+<div class="grid-two">
+ <section class="window"><div class="titlebar"><h2>Park telemetry</h2><span class="caps">Pixel plot</span></div><div class="body">
+  <div class="graph-controls"><label for="metric">Plot <select id="metric"><option value="mean_happiness">Mean happiness (0-255)</option><option value="park_rating">Park rating (0-999)</option><option value="hungry">Hungry guests (count)</option><option value="thirsty">Thirsty guests (count)</option><option value="sick">Sick guests (count)</option><option value="queuing">Queuing guests (count)</option><option value="cash_raw_tenths">Park cash (GBP)</option><option value="ride_customers">Additional ride customers</option><option value="shop_customers">Additional shop customers</option></select></label><span class="small muted">5-second steps / hover or tap</span></div>
+  <div class="graph-well"><canvas class="chart" id="telemetry" width="800" height="265" role="img" aria-label="Park metrics over time, with native baseline and four D3 treatments"></canvas></div>
+  <div class="legend" id="legend"></div><div class="chart-readout" id="chart-readout" aria-live="polite">The native baseline is re-run for every treatment and matches exactly.</div>
+  <p class="small muted">Shared initial state and RNG. Live D3 inference is asynchronous; these curves are observations, not proof of a model-quality gain.</p>
+ </div></section>
+ <section class="window"><div class="titlebar"><h2>Did D3 take the wheel?</h2><span class="caps">Completed only</span></div><div class="body">
+  <div class="outcome-key"><span><i class="swatch redirect"></i> Redirect</span><span><i class="swatch unchanged"></i> Same target</span><span><i class="swatch fallback"></i> Low confidence</span><span><i class="swatch stale"></i> Stale</span></div>
+  <div id="outcome-bars"></div><div class="callout"><strong>The confidence trap:</strong> a high-scoring confirmation of the existing destination is not a new decision. A low score sends the guest back to native logic. Compare these outcomes separately.</div>
+ </div></section>
+</div>
+<section class="window"><div class="titlebar"><h2>Model league table</h2><span class="caps">Click a treatment to inspect</span></div><div class="body table-scroll">
+ <table id="league"><caption>Rates use completed decisions. Median / p95 latency includes queueing and both option-order passes. Unfinished requests are listed separately.</caption><thead><tr><th>Treatment</th><th>Done / pending</th><th>Redirects</th><th>Same target</th><th>Low conf.</th><th>Stale</th><th>Latency ms<br>median / p95</th><th>Happiness<br>time mean</th><th>Rating<br>at end</th></tr></thead><tbody></tbody></table>
+</div></section>
+<section class="window" id="confidence-window"><div class="titlebar"><h2>Confidence lab - is the model following a shortcut?</h2><span class="caps">A / B prompt experiment</span></div><div class="body confidence-layout">
+ <div><h3>Confidence when an existing target is offered</h3><p class="small muted">Solid bar: incumbent offered. Faded bar: not offered. Contexts differ; this is descriptive, not a matched causal comparison.</p><div id="confidence-bars"></div><p class="small" id="neutral-invariance"></p></div>
+ <div class="well lab-note"><h3>A: original / B: incumbent-neutral</h3><ol><li>A includes <code>current_destination</code> and per-option <code>already_heading_here</code>.</li><li>B removes those hints from model input, while retaining the actual target for freshness checks and diagnostics.</li><li>The <b>45% probability + 8pp margin gate is unchanged</b>. Candidate filtering, scheduling and main-thread safety checks are unchanged.</li></ol><div id="historical-note"></div><p id="ab-finding"></p><p><b>Interpretation:</b> removing incumbent bias does not automatically resolve fallback. If confidence falls, more native fallbacks can be the correct measured result of the unchanged gate.</p></div>
+</div></section>
+<section class="window"><div class="titlebar"><h2>Guest inspector</h2><span id="selected-label"></span></div><div class="body">
+ <div class="trace-head"><label for="trace-select">Captured example <select id="trace-select"></select></label><span class="pill">Real frozen input / no generated demo numbers</span></div>
+ <div id="trace-content" class="detail-grid"></div>
+</div></section>
+<section class="window" id="architecture-window"><div class="titlebar"><h2>Decision architecture</h2><span class="caps">Same paths / different destination chooser</span></div><div class="body diagram-grid">
+ <div><h3>Original guest decision flow</h3><div id="native-diagram"></div></div><div><h3>D3-assisted guest decision flow</h3><div id="d3-diagram"></div></div>
+</div></section>
+<section class="window"><div class="titlebar"><h2>Research notebook / reproducibility</h2><span class="caps">No victory laps</span></div><div class="body">
+ <p class="small">One populated Blackpool park, one initial RNG state, one run per treatment. No confidence intervals or statistical-significance claims. Park metrics are population aggregates; guest membership can change. Frozen-input ablations test prompt sensitivity, not counterfactual park performance.</p>
+ <p class="small"><b>Default gameplay is unchanged.</b> The B prompt is explicitly selected by the evaluation runner on branch <code>ab/d3-incumbent-neutral</code>. Models remain CUDA classifiers; they do not replace native pathfinding, payments or ride operations.</p>
+ <p class="small"><a href="eval-data.json" download>Download embedded data + evidence hashes</a> / <a href="suite.json" download>Suite provenance</a> / <a href="README.txt">Run notes</a></p>
+ <details><summary>Exact evaluation commands</summary><pre>.\scripts\run-d3-eval-suite.ps1 -Seconds 300
+node .\scripts\build-d3-eval-dashboard.mjs .\bin\d3-eval-suite-20261025 .\bin\d3-park-lab .\bin\guest-decision-comparison-20261020
+
+# One B treatment:
+.\scripts\compare-guest-decisions.ps1 -Seconds 300 -Model d3-lite -PromptVariant incumbent-neutral</pre></details>
+ <details><summary>Raw reports and traces for the selected treatment</summary><div id="evidence-links"></div></details>
+</div></section>
+<footer><span>D3 PARK LAB / original pixel art / OpenRCT2 experiment</span><span id="provenance"></span></footer>
+</main>
+<section id="slides" class="hidden" aria-label="Two-slide presentation">
+ <nav class="slide-toolbar"><a href="dashboard.html">&lt; Back to dashboard</a><div class="slide-pager"><button id="prev-slide" aria-label="Previous slide">&lt;</button><span id="slide-counter" aria-live="polite">1 / 2</span><button id="next-slide" aria-label="Next slide">&gt;</button><button id="print-slides">Print / PDF</button></div><span class="small">Arrow keys / Home / End</span></nav>
+ <article class="slide active" id="slide-1">
+  <div class="slide-title"><span>D3 PARK LAB / 01 - ORIGINAL DECISION FLOW</span><span>Guest Research Department</span></div>
+  <div class="slide-content"><div class="caps eyebrow">Start with what the game already does</div><h1>A confident model can still be a passenger.</h1><p class="subtitle">Native logic already has a destination. Confirming that destination is not evidence that D3 improved it.</p>
+   <div class="slide-columns"><div id="slide-native-diagram"></div><div><div class="window"><div class="titlebar"><span>The confidence flaw / trace evidence</span></div><div class="body"><p class="slide-note" id="slide-evidence-intro">In the 20 Oct D3-Lite run, confidence was much higher when the existing target appeared among the options.</p><div class="mini-stats" id="slide-historical-stats"></div><div class="callout" id="slide-historical-ablation"></div><p class="small">Scores are not calibrated certainty. The gate protects the simulation, but incumbent anchoring can make accepted counts look more impressive than actual redirects.</p></div></div><div class="slide-thesis">Evaluate redirects, unchanged confirmations and native fallbacks separately.</div></div></div>
+  </div><div class="slide-footer"><span>Native engine: needs + knowledge + suitability + destination + bounded pathfinding</span><span>Historical evidence is separate from the new A/B suite.</span></div>
+ </article>
+ <article class="slide" id="slide-2">
+  <div class="slide-title"><span>D3 PARK LAB / 02 - D3 + A/B EVALUATION</span><span>Lite vs Edge / original vs neutral</span></div>
+  <div class="slide-content"><div class="caps eyebrow">Remove the shortcut. Keep the safety net.</div><h1>Four treatments. Honest outcomes.</h1><p class="subtitle">B removes incumbent hints only. Same candidates, 45% top score, 8pp margin and main-thread revalidation.</p>
+   <div class="slide-columns"><div id="slide-d3-diagram"></div><div><div class="window"><div class="titlebar"><span id="slide-duration">Completed decisions</span></div><div class="body"><div class="outcome-key"><span><i class="swatch redirect"></i> Redirect</span><span><i class="swatch unchanged"></i> Same</span><span><i class="swatch fallback"></i> Low conf.</span><span><i class="swatch stale"></i> Stale</span></div><div id="slide-outcomes"></div><div class="comparison-chips" id="slide-chips"></div></div></div><div class="callout" id="slide-conclusion"></div><p class="small">Identical imported state/RNG and repeated native baselines. One park / one run per treatment; not a statistical or long-term performance claim.</p></div></div>
+  </div><div class="slide-footer"><span id="slide-source"></span><span>Native pathfinding and simulation remain authoritative.</span></div>
+ </article>
+</section>
+<script id="eval-data" type="application/json">__D3_EVAL_DATA__</script>
+<script>
+"use strict";
+const D = JSON.parse(document.getElementById("eval-data").textContent);
+const $ = id => document.getElementById(id);
+const pct = (value, digits=1) => value == null ? "n/a" : (value * 100).toFixed(digits) + "%";
+const num = (value, digits=0) => value == null ? "n/a" : Number(value).toLocaleString("en-GB", {maximumFractionDigits:digits, minimumFractionDigits:digits});
+const esc = value => String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let selected = D.runs[0];
+const enabled = new Set(D.runs.map(run => run.id));
+const total = D.runs.reduce((sum, run) => sum + run.completed, 0);
+const seconds = D.suite.seconds_per_variant;
+const dateLabel = new Date(D.suite.completed_utc).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric",timeZone:"UTC"});
+$("run-badge").textContent = `Blackpool / ${seconds}s / 40 ticks per second / ${dateLabel}`;
+$("slide-duration").textContent = `Completed decisions / ${seconds<60?seconds+" seconds":num(seconds/60,seconds%60?1:0)+" minutes"} per treatment`;
+$("status-left").textContent = "OPEN: 4 treatments / matching initial state + RNG / native baselines verified";
+$("summary-stats").innerHTML = [
+ ["MODELS AT THE GATE","2","D3-Lite + D3-Edge"],
+ ["PROMPT TREATMENTS","A / B","Original + incumbent-neutral"],
+ ["DECISIONS INSPECTED",num(total),"Completed, across all four treatments"],
+ ["RUN LENGTH",`${num(seconds/60,seconds%60 ? 1 : 0)} min`,"Per native/model variant / 4 pairs"],
+].map(([title,value,note]) => `<div class="stat"><span class="caps">${title}</span><strong>${value}</strong><em>${note}</em></div>`).join("");
+function outcomeBars(runs) {
+ return runs.map(run => `<div class="outcome-row"><div class="outcome-head"><b>${esc(run.label)}</b><span>${pct(run.redirect_rate)} redirected</span></div><div class="stack" role="img" aria-label="${esc(run.label)}: ${run.outcomes.applied} redirects, ${run.outcomes.unchanged} unchanged, ${run.outcomes.low_confidence} low confidence, ${run.outcomes.stale} stale">${[
+ ["applied","redirect"],["unchanged","unchanged"],["low_confidence","fallback"],["stale","stale"]
+ ].map(([key,css]) => `<span class="${css}" style="width:${100*run.outcomes[key]/run.completed}%" title="${key}: ${run.outcomes[key]} (${pct(run.outcomes[key]/run.completed)})"></span>`).join("")}</div></div>`).join("");
+}
+$("outcome-bars").innerHTML = outcomeBars(D.runs);
+$("slide-outcomes").innerHTML = outcomeBars(D.runs);
+$("league").querySelector("tbody").innerHTML = D.runs.map(run => `<tr data-run="${run.id}"><td><button class="rowlink" data-select="${run.id}"><i class="swatch" style="background:${run.color}"></i> ${esc(run.label)}</button></td><td>${num(run.completed)} / ${run.comparison.model_on.pending}</td><td>${num(run.outcomes.applied)}<br>${pct(run.redirect_rate)}</td><td>${num(run.outcomes.unchanged)}<br>${pct(run.unchanged_rate)}</td><td>${num(run.outcomes.low_confidence)}<br>${pct(run.fallback_rate)}</td><td>${num(run.outcomes.stale)}</td><td>${num(run.latency_median_ms)} / ${num(run.latency_p95_ms)}</td><td>${num(run.comparison.model_on.time_mean.mean_happiness,2)}</td><td>${num(run.comparison.model_on.end.park_rating)}</td></tr>`).join("");
+$("confidence-bars").innerHTML = D.runs.map(run => `<div class="confidence-row"><div class="confidence-label"><b>${esc(run.label)}</b></div><div class="dual-bar"><span style="width:${100*(run.confidence_present??0)}%;background:${run.color}"></span></div><div class="dual-bar"><span style="width:${100*(run.confidence_absent??0)}%;background:${run.color};opacity:.45"></span></div><div class="confidence-values"><span>Offered: ${pct(run.confidence_present)} / n=${run.incumbent_present_count}</span><span>Absent: ${pct(run.confidence_absent)} / n=${run.incumbent_absent_count}</span></div></div>`).join("");
+const neutralRuns = D.runs.filter(run => run.variant === "incumbent-neutral");
+$("neutral-invariance").textContent = neutralRuns.map(run => `${run.model}: ${run.analysis.incumbent_ablation.samples} matched hint interventions; max probability change ${num(run.matched_ablation_max_difference,6)}.`).join(" ");
+const deltaText = model => {
+ const a = D.runs.find(run => run.model===model && run.variant==="original");
+ const b = D.runs.find(run => run.model===model && run.variant==="incumbent-neutral");
+ const delta = (b.fallback_rate-a.fallback_rate)*100;
+ return `${model==="d3-lite"?"Lite":"Edge"}: B ${delta>=0?"+":""}${delta.toFixed(1)}pp low-confidence fallback vs A`;
+};
+$("ab-finding").textContent = deltaText("d3-lite") + "; " + deltaText("d3-edge") + ".";
+$("slide-chips").innerHTML = neutralRuns.map(run => {
+ const a = D.runs.find(other => other.model===run.model && other.variant==="original");
+ const delta = 100*(run.fallback_rate-a.fallback_rate);
+ return `<div class="chip">${esc(run.model)} / B minus A<b>${delta>=0?"+":""}${num(delta,1)}pp</b>low-confidence fallback</div>`;
+}).join("");
+$("slide-conclusion").innerHTML = "<b>Measured, not assumed:</b> " + esc(deltaText("d3-lite")) + ". " + esc(deltaText("d3-edge")) + ". Removing the shortcut is not a guarantee of fewer fallbacks or a better park.";
+const historical = D.historical?.analysis;
+if (historical) {
+ const present = historical.groups.existing_target_offered;
+ const absent = historical.groups.existing_target_not_offered;
+ const ablation = historical.incumbent_ablation;
+ $("historical-note").innerHTML = `<p><span class="pill">Prior evidence / 20 Oct / D3-Lite</span><br>Existing target offered: <b>${pct(present.mean_max_probability)}</b> mean top score; absent: <b>${pct(absent.mean_max_probability)}</b>. In ${ablation.samples} frozen inputs, marking another option made it win ${pct(ablation.swapped_target_wins_rate,0)} of the time.</p>`;
+ $("slide-historical-stats").innerHTML = [[pct(present.mean_max_probability),"Target offered"],[pct(absent.mean_max_probability),"Target absent"]].map(([value,label])=>`<div class="stat"><span class="caps">${label}</span><strong>${value}</strong><em>Mean top probability</em></div>`).join("");
+ $("slide-historical-ablation").innerHTML = `<b>${ablation.samples} frozen-input tests:</b> move the incumbent label to another option and that marked option wins <b>${pct(ablation.swapped_target_wins_rate,0)}</b> of the time. Hide the hints and mean confidence drops to <b>${pct(ablation.hidden_mean_confidence)}</b>.`;
+} else {
+ $("slide-evidence-intro").textContent = "Fresh original-prompt runs: inspect confidence when the existing destination is among the options.";
+ $("historical-note").textContent = "Historical evidence not included in this package.";
+ $("slide-historical-stats").innerHTML = D.runs.filter(run=>run.variant==="original").map(run=>`<div class="stat"><span class="caps">${esc(run.model)} / target offered</span><strong>${pct(run.confidence_present)}</strong><em>Fresh run / mean top probability</em></div>`).join("");
+ $("slide-historical-ablation").textContent = "Inspect the fresh frozen-input ablations in the dashboard. Descriptive confidence differences alone do not establish causality.";
+}
+$("provenance").textContent = `Eval ${D.suite.source_revision.slice(0,10)} / park ${D.suite.park_sha256.slice(0,10)}`;
+$("slide-source").textContent = `${dateLabel} / eval ${D.suite.source_revision.slice(0,10)} / ${seconds}s per variant / single park`;
+$("legend").innerHTML = `<span><i class="swatch" style="background:#e7d6ad"></i> Native baseline</span>` + D.runs.map(run => `<label><input type="checkbox" data-toggle="${run.id}" checked><i class="swatch" style="background:${run.color}"></i>${esc(run.label)}</label>`).join("");
+document.querySelectorAll("[data-toggle]").forEach(input => input.addEventListener("change",()=>{input.checked?enabled.add(input.dataset.toggle):enabled.delete(input.dataset.toggle);drawChart();}));
+const metricLabel = () => $("metric").selectedOptions[0].textContent;
+function metricValue(row, metric, initial) {
+ if(metric==="cash_raw_tenths") return row[metric]/10;
+ if(metric==="ride_customers"||metric==="shop_customers") return row[metric]-initial[metric];
+ return row[metric];
+}
+function plotSeries(metric) {
+ return [{id:"native",label:"Native",color:"#e7d6ad",series:D.native},...D.runs.filter(run=>enabled.has(run.id))]
+  .map(run=>({...run,values:run.series.map(row=>metricValue(row,metric,run.series[0]))}));
+}
+const canvas=$("telemetry"), ctx=canvas.getContext("2d"), plot={x:63,y:25,w:711,h:192};
+function drawChart() {
+ const metric=$("metric").value, rows=plotSeries(metric), values=rows.flatMap(run=>run.values);
+ let lo=Math.min(...values),hi=Math.max(...values);
+ const pad=Math.max((hi-lo)*.12,hi===lo?1:0.5);lo-=pad;hi+=pad;
+ ctx.imageSmoothingEnabled=false;ctx.fillStyle="#283e37";ctx.fillRect(0,0,800,265);ctx.font="12px Consolas, monospace";ctx.lineWidth=1;
+ for(let i=0;i<=4;i++){const y=Math.round(plot.y+plot.h*i/4)+.5;ctx.strokeStyle="#4b6251";ctx.beginPath();ctx.moveTo(plot.x,y);ctx.lineTo(plot.x+plot.w,y);ctx.stroke();ctx.fillStyle="#cfdbbb";ctx.textAlign="right";ctx.fillText(num(hi-(hi-lo)*i/4,hi-lo<10?1:0),plot.x-9,y+4);}
+ for(let i=0;i<=5;i++){const x=Math.round(plot.x+plot.w*i/5)+.5;ctx.strokeStyle="#4b6251";ctx.beginPath();ctx.moveTo(x,plot.y);ctx.lineTo(x,plot.y+plot.h);ctx.stroke();ctx.fillStyle="#cfdbbb";ctx.textAlign="center";ctx.fillText(Math.round(seconds*i/5)+"s",x,plot.y+plot.h+22);}
+ for(const run of rows){ctx.strokeStyle=run.color;ctx.lineWidth=run.id==="native"?3:2;ctx.setLineDash(run.id==="native"?[5,4]:[]);ctx.beginPath();let lastY;
+  for(let s=0;s<=seconds;s+=5){const second=Math.min(s,seconds),x=Math.round(plot.x+plot.w*second/seconds),y=Math.round(plot.y+plot.h*(hi-run.values[second])/(hi-lo));if(s===0)ctx.moveTo(x,y);else{ctx.lineTo(x,lastY);ctx.lineTo(x,y);}lastY=y;}
+  if(seconds%5){const y=Math.round(plot.y+plot.h*(hi-run.values.at(-1))/(hi-lo));ctx.lineTo(plot.x+plot.w,lastY);ctx.lineTo(plot.x+plot.w,y);}ctx.stroke();
+ }ctx.setLineDash([]);ctx.fillStyle="#dfdfbc";ctx.textAlign="left";ctx.font="11px Consolas, monospace";ctx.fillText(metricLabel(),plot.x,14);
+ canvas.setAttribute("aria-label",`${metricLabel()} over ${seconds} seconds. ${rows.map(run=>run.label+": start "+num(run.values[0],2)+", end "+num(run.values.at(-1),2)).join(". ")}`);
+}
+canvas.addEventListener("pointermove",event=>{const rect=canvas.getBoundingClientRect();const x=(event.clientX-rect.left)*800/rect.width;const second=Math.max(0,Math.min(seconds,Math.round((x-plot.x)/plot.w*seconds)));$("chart-readout").textContent=`${second}s / `+plotSeries($("metric").value).map(run=>`${run.label}: ${num(run.values[second],2)}`).join(" | ");});
+$("metric").addEventListener("change",drawChart);
+$("overview-button").addEventListener("click",()=>window.scrollTo({top:0,behavior:"smooth"}));
+function selectRun(id) {
+ selected=D.runs.find(run=>run.id===id);
+ document.querySelectorAll("[data-run]").forEach(row=>row.classList.toggle("selected",row.dataset.run===id));
+ $("selected-label").textContent=selected.label;
+ $("trace-select").innerHTML=selected.examples.map((example,i)=>`<option value="${i}">Guest ${example.guest_id} / ${example.outcome} / ${pct(example.confidence)}</option>`).join("");
+ $("trace-select").disabled=!selected.examples.length;
+ $("evidence-links").innerHTML=["comparison.json","analysis.json","model-decisions.jsonl","incumbent-ablation.jsonl","model-metrics.csv","native-metrics.csv","test-results.xml"].map(file=>`<p class="small"><a href="results/${selected.id}/${file}" download>${esc(file)}</a></p>`).join("");
+ showTrace();
+}
+function showTrace(){
+ const example=selected.examples[Number($("trace-select").value)];
+ if(!example){$("trace-content").textContent="No captured examples for this short run.";return;}
+ $("trace-content").innerHTML=`<div class="well"><h3>${esc(example.outcome)} / ${pct(example.confidence)} top score</h3><p class="small">Guest ${example.guest_id} / previous target ${example.incumbent_id} / winner ${example.winner_id}<br>Margin ${pct(example.margin)} / queue-inclusive ${num(example.elapsed_ms)}ms</p><div class="trace-options">${example.options.map(option=>`<div>${esc(option.code)} / ${esc(option.display_name||"ride_"+option.ride_id)} ${pct(option.probability)}${option.ride_id===example.incumbent_id?" [incumbent]":""}<div class="option-bar"><span style="width:${100*option.probability}%"></span></div></div>`).join("")}</div></div><div><details><summary>Actual model-visible state</summary><pre>${esc(JSON.stringify(example.state,null,2))}</pre></details><details><summary>Exact classifier prompt</summary><pre>${esc(example.prompt)}</pre></details><details><summary>Options and retained diagnostic attributes</summary><p class="small">B removes incumbent hints from the prompt; the original attributes remain here for audit only.</p><pre>${esc(JSON.stringify(example.options,null,2))}</pre></details></div>`;
+}
+document.querySelectorAll("[data-select]").forEach(button=>button.addEventListener("click",()=>selectRun(button.dataset.select)));
+$("trace-select").addEventListener("change",showTrace);
+const nativeDiagram=`<svg class="diagram native" viewBox="0 0 530 440" role="img" aria-label="Native decision flow: guest needs, known destinations, suitability and choice, persistent destination, native pathfinding and execution"><defs><marker id="arrowNative" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#715b78"/></marker></defs>
+<rect class="node" x="85" y="16" width="360" height="53"/><text x="265" y="39" text-anchor="middle">Guest state + current needs</text><text class="label" x="265" y="57" text-anchor="middle">Hunger / thirst / cash / preferences</text><path class="arrow" d="M265 69V91"/>
+<rect class="node" x="85" y="92" width="360" height="53"/><text x="265" y="115" text-anchor="middle">Native knowledge + eligibility</text><text class="label" x="265" y="133" text-anchor="middle">Known rides / open shops / suitability</text><path class="arrow" d="M265 145V167"/>
+<rect class="node" x="85" y="168" width="360" height="53"/><text x="265" y="191" text-anchor="middle">Native destination selection</text><text class="label" x="265" y="209" text-anchor="middle">Need-driven facilities / ride choice</text><path class="arrow" d="M265 221V243"/>
+<rect class="node gate" x="85" y="244" width="360" height="53"/><text x="265" y="267" text-anchor="middle">Persistent destination / intent</text><text class="label" x="265" y="285" text-anchor="middle">Existing target can already be good</text><path class="arrow" d="M265 297V319"/>
+<rect class="node safe" x="85" y="320" width="360" height="53"/><text x="265" y="343" text-anchor="middle">Native pathfinding + execution</text><text class="label" x="265" y="361" text-anchor="middle">Bounded search / queues / purchases</text><path class="arrow" d="M445 347H482V42H445"/><text class="label" x="265" y="410" text-anchor="middle">Destination choice is not route planning.</text></svg>`;
+const d3Diagram=`<svg class="diagram d3" viewBox="0 0 530 440" role="img" aria-label="D3 flow: frozen state and native shortlist, two option-order classifier passes, confidence gate, fallback or main-thread validation, unchanged native pathfinding"><defs><marker id="arrowD3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#715b78"/></marker></defs>
+<rect class="node" x="40" y="12" width="450" height="48"/><text x="265" y="32" text-anchor="middle">Frozen guest state + native shortlist</text><text class="label" x="265" y="49" text-anchor="middle">2-8 eligible options / urgent-need filters</text><path class="arrow" d="M265 60V79"/>
+<rect class="node model" x="40" y="80" width="450" height="57"/><text x="265" y="101" text-anchor="middle">D3-Lite / D3-Edge - two-order scoring</text><text class="label" x="265" y="120" text-anchor="middle">B: omit incumbent hints / preserve all other facts</text><path class="arrow" d="M265 137V155"/>
+<path class="gate" d="M265 156L395 203L265 250L135 203Z" stroke-width="2"/><text x="265" y="196" text-anchor="middle">Top &gt;= 45%?</text><text x="265" y="216" text-anchor="middle">Margin &gt;= 8pp?</text><path class="arrow" d="M395 203H478V270"/><text class="label" x="421" y="193">No</text><path class="arrow" d="M265 250V276"/><text class="label" x="276" y="267">Yes</text>
+<rect class="node safe" x="40" y="277" width="340" height="50"/><text x="210" y="298" text-anchor="middle">Main-thread revalidation</text><text class="label" x="210" y="316" text-anchor="middle">Identity / age / motives / target eligibility</text><path class="arrow" d="M380 300H421"/><text class="label" x="385" y="289">Stale</text>
+<rect class="node gate" x="422" y="271" width="98" height="57"/><text class="label" x="471" y="294" text-anchor="middle">Native</text><text class="label" x="471" y="312" text-anchor="middle">fallback</text><path class="arrow" d="M210 327V349"/><path class="arrow" d="M471 328V377H395"/>
+<rect class="node safe" x="40" y="350" width="355" height="53"/><text x="217" y="373" text-anchor="middle">Native pathfinding + execution</text><text class="label" x="217" y="391" text-anchor="middle">Accept: redirect OR keep existing target</text><text class="label" x="265" y="429" text-anchor="middle">Bounded worker / 4 requests per second / native safety net</text></svg>`;
+// Each rendered SVG needs unique marker IDs, including the slide copies.
+function setDiagram(target, markup, suffix){const container=$(target);container.innerHTML=markup.replaceAll("arrowNative","arrowNative"+suffix).replaceAll("arrowD3","arrowD3"+suffix);const marker=container.querySelector("marker").id;container.querySelectorAll(".arrow").forEach(arrow=>arrow.style.markerEnd=`url(#${marker})`);}
+setDiagram("native-diagram",nativeDiagram,"Dashboard");setDiagram("d3-diagram",d3Diagram,"Dashboard");
+setDiagram("slide-native-diagram",nativeDiagram,"Slide");setDiagram("slide-d3-diagram",d3Diagram,"Slide");
+let slideIndex=0;
+function showSlide(index){slideIndex=Math.max(0,Math.min(1,index));document.querySelectorAll(".slide").forEach((slide,i)=>slide.classList.toggle("active",i===slideIndex));$("slide-counter").textContent=`${slideIndex+1} / 2`;$("prev-slide").disabled=slideIndex===0;$("next-slide").disabled=slideIndex===1;}
+$("prev-slide").addEventListener("click",()=>showSlide(slideIndex-1));$("next-slide").addEventListener("click",()=>showSlide(slideIndex+1));$("print-slides").addEventListener("click",()=>window.print());
+document.addEventListener("keydown",event=>{if(document.body.dataset.view!=="slides"||/^(INPUT|SELECT|TEXTAREA)$/.test(event.target.tagName))return;if(["ArrowRight","PageDown"," "].includes(event.key)){showSlide(slideIndex+1);event.preventDefault();}if(["ArrowLeft","PageUp"].includes(event.key)){showSlide(slideIndex-1);event.preventDefault();}if(event.key==="Home")showSlide(0);if(event.key==="End")showSlide(1);});
+if(document.body.dataset.view==="slides"){$("dashboard").classList.add("hidden");$("slides").classList.remove("hidden");}
+selectRun(D.runs[0].id);drawChart();showSlide(0);
+window.D3ParkLab={data:D,drawChart,selectRun,showSlide};
+</script>
+</body>
+</html>
