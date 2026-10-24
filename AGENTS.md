@@ -81,6 +81,66 @@ Select installed models in **Options > Advanced**. Narration and destination
 decisions have independent toggles and pickers; D3 decisions default to off.
 The running game never downloads models or contacts an inference service.
 
+## Demo walkthrough
+
+Prepare the default narration model and both D3 classifiers before presenting;
+do not download the entire catalogue just for a demo. Use a Windows ARM64 CUDA
+machine with sufficient free GPU memory and the pinned runtime above. Close
+other inference workloads. Have original RCT2 assets configured and a populated,
+single-player park ready; `test\tests\testdata\parks\bpb.sv6` is the comparison
+script's default example. Work from a copy of any personal save.
+
+1. Launch `.\bin\openrct2.exe` and load the populated park. Start at normal
+   simulation speed. In **Options > Advanced**, leave **Experimental guest
+   decisions** off to establish the native baseline.
+2. Enable **Experimental guest thoughts**, select **Qwen2.5-1.5B-Instruct**, and
+   open a guest's **Thoughts** tab. Allow the initial model load; `Thinking...`
+   should become first-person text grounded in that guest's current state.
+   Enlarge the guest window if needed to see more of the paragraph. Show their
+   needs/activity alongside the generated thought, then choose another guest
+   with a different need. Only open Thoughts tabs request narration.
+3. Toggle narration off to show the native thought list, then back on. If
+   another narration model was prepared in advance, switch the **Language
+   model** picker to demonstrate cancellation/reloading without restarting.
+   Missing model shards disable that entry; do not promise instantaneous loads.
+4. Enable **Experimental guest decisions**, selecting **D3-Lite** initially.
+   Open the park-wide **Guests** window's **D3** tab and let the simulation run.
+   Check the model status, pending requests and newest-first completed feed.
+   Sampling is park-wide and bounded, not inference for every guest each tick.
+5. Click a feed row to open that guest's **D3** tab. Explain the offered
+   destinations and their score bars. Contrast a changed destination with
+   **Accepted - already heading there**, **Native fallback - low confidence**,
+   or **Native fallback - stale result** when those outcomes occur. An accepted
+   result is not necessarily a redirect; a green bar is not proof of a good
+   choice, and probabilities are over the offered options, not calibrated
+   certainty. Guests with fewer than two eligible choices may have no record.
+6. Switch to **D3-Edge** if desired, allowing the new model to load. Toggle
+   decisions off to return to native selection; this does not rewind targets
+   already applied. Reload the original save for a clean baseline comparison.
+
+For a repeatable five-minute-per-variant comparison, build `tests.exe`, stop
+other model workloads (including the live game's inference), and run:
+
+```powershell
+.\scripts\compare-guest-decisions.ps1 -Seconds 300 -Model d3-lite
+```
+
+Add `-Park "C:\parks\demo.park"` to use a different saved park. The script reloads
+the same starting state for each variant and writes reports/traces beneath a
+new `bin\guest-decision-comparison-*` directory. Inspect `comparison.json`,
+`analysis.json` and `model-decisions.jsonl`; use
+`guest-decision-architecture.html` to explain candidate selection and native
+pathfinding. A short run does not establish better park performance. Existing
+traces show strong incumbent-target anchoring, so present fallback/unchanged
+outcomes honestly rather than selecting only successful redirects.
+
+If narration stays native or D3 reports unavailable, check model files,
+catalogues, pinned DLLs and free GPU memory; inspect the game's console/log
+diagnostics. D3 needs CUDA and runs only in normal single-player gameplay, not
+title/editor, multiplayer or replay modes. Invalid narration restores native
+thoughts, and generated prose can still invent details despite lexical checks.
+Do not use output quality as a substitute for checking actual guest state.
+
 ## Focused checks and invariants
 
 Run tests with `bin` as the working directory:
