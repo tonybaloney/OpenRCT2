@@ -19,6 +19,8 @@ namespace
         std::atomic_int calls{};
         std::atomic_int cancellations{};
         std::atomic_bool block{};
+        std::atomic_bool holdCancellation{};
+        std::atomic_int destroyed{};
         std::thread::id thread;
     };
 
@@ -31,6 +33,10 @@ namespace
             : _state(std::move(state))
         {
         }
+        ~FakeBackend() override
+        {
+            ++_state->destroyed;
+        }
         std::string generate(const GuestNarrativeSnapshot& snapshot, const std::atomic_bool& cancelled) override
         {
             _state->thread = std::this_thread::get_id();
@@ -40,6 +46,8 @@ namespace
             if (cancelled)
             {
                 ++_state->cancellations;
+                while (_state->holdCancellation)
+                    std::this_thread::sleep_for(1ms);
                 return {};
             }
             return snapshot.hunger <= 10 ? "I need food." : "I am happy.";
@@ -181,4 +189,78 @@ TEST(GuestThoughtService, BackendFailureIsExplicit)
     service.update(ticket, Snapshot());
     ASSERT_TRUE(Wait([&] { return service.read(ticket).status == GuestThoughtService::Status::unavailable; }));
     EXPECT_TRUE(service.read(ticket).text.empty());
+}
+
+TEST(GuestThoughtService, ModelSwitchCancelsAndPreservesTicketsWithoutBlockingCaller)
+{
+    auto old = std::make_shared<BackendState>();
+    auto next = std::make_shared<BackendState>();
+    old->block = true;
+    old->holdCancellation = true;
+    GuestThoughtService service([old] { return std::make_unique<FakeBackend>(old); }, 1h);
+    const auto ticket = service.subscribe();
+    service.update(ticket, Snapshot());
+    ASSERT_TRUE(Wait([&] { return old->calls == 1; }));
+    service.reconfigure([old, next] {
+        EXPECT_EQ(old->destroyed, 1);
+        return std::make_unique<FakeBackend>(next);
+    });
+    EXPECT_EQ(service.read(ticket).status, GuestThoughtService::Status::pending);
+    EXPECT_EQ(next->calls, 0);
+    old->holdCancellation = false;
+    ASSERT_TRUE(Wait([&] { return service.read(ticket).status == GuestThoughtService::Status::ready; }));
+    EXPECT_EQ(old->cancellations, 1);
+    EXPECT_EQ(next->calls, 1);
+    EXPECT_EQ(service.read(ticket).text, "I am happy.");
+}
+
+TEST(GuestThoughtService, RapidModelSwitchOnlyLoadsLatestSelectionAndLatestState)
+{
+    auto old = std::make_shared<BackendState>();
+    auto skipped = std::make_shared<BackendState>();
+    auto next = std::make_shared<BackendState>();
+    old->block = true;
+    old->holdCancellation = true;
+    GuestThoughtService service([old] { return std::make_unique<FakeBackend>(old); }, 0ms);
+    const auto ticket = service.subscribe();
+    service.update(ticket, Snapshot());
+    ASSERT_TRUE(Wait([&] { return old->calls == 1; }));
+    service.reconfigure([skipped] { return std::make_unique<FakeBackend>(skipped); });
+    auto hungry = Snapshot();
+    hungry.hunger = 8;
+    service.update(ticket, hungry);
+    service.reconfigure([next] { return std::make_unique<FakeBackend>(next); });
+    old->holdCancellation = false;
+    ASSERT_TRUE(Wait([&] { return service.read(ticket).status == GuestThoughtService::Status::ready; }));
+    EXPECT_EQ(skipped->calls, 0);
+    EXPECT_EQ(next->calls, 1);
+    EXPECT_EQ(service.read(ticket).text, "I need food.");
+}
+
+TEST(GuestThoughtService, DisablingUnloadsIdleModelAndCanReenableExistingTickets)
+{
+    auto state = std::make_shared<BackendState>();
+    GuestThoughtService service([state] { return std::make_unique<FakeBackend>(state); }, 1h);
+    const auto ticket = service.subscribe();
+    service.update(ticket, Snapshot());
+    ASSERT_TRUE(Wait([&] { return service.read(ticket).status == GuestThoughtService::Status::ready; }));
+    service.reconfigure({});
+    ASSERT_TRUE(Wait([&] { return state->destroyed == 1; }));
+    EXPECT_EQ(service.read(ticket).status, GuestThoughtService::Status::unavailable);
+    service.reconfigure([state] { return std::make_unique<FakeBackend>(state); });
+    ASSERT_TRUE(Wait([&] { return service.read(ticket).status == GuestThoughtService::Status::ready; }));
+    EXPECT_EQ(state->calls, 2);
+}
+
+TEST(GuestThoughtService, SwitchingToMissingModelIsExplicitAndRecoverable)
+{
+    auto state = std::make_shared<BackendState>();
+    GuestThoughtService service([state] { return std::make_unique<FakeBackend>(state); }, 0ms);
+    const auto ticket = service.subscribe();
+    service.update(ticket, Snapshot());
+    ASSERT_TRUE(Wait([&] { return service.read(ticket).status == GuestThoughtService::Status::ready; }));
+    service.reconfigure([]() -> std::unique_ptr<IGuestThoughtBackend> { throw std::runtime_error("selected model missing"); });
+    ASSERT_TRUE(Wait([&] { return service.read(ticket).status == GuestThoughtService::Status::unavailable; }));
+    service.reconfigure([state] { return std::make_unique<FakeBackend>(state); });
+    ASSERT_TRUE(Wait([&] { return service.read(ticket).status == GuestThoughtService::Status::ready; }));
 }

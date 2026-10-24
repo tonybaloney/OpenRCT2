@@ -45,11 +45,13 @@
 #include <openrct2/drawing/RenderTarget.h>
 #include <openrct2/interface/ScreenCoords.hpp>
 #include <openrct2/interface/Viewport.h>
+#include <openrct2/peep/GuestDecision.h>
 #include <openrct2/peep/GuestThoughtService.h>
 #include <openrct2/platform/Platform.h>
 #include <openrct2/scenes/title/TitleSequencePlayer.h>
 #include <openrct2/ui/UiContext.h>
 #include <openrct2/ui/WindowManager.h>
+#include <stdexcept>
 #include <vector>
 
 #ifdef __EMSCRIPTEN__
@@ -102,24 +104,52 @@ private:
     std::unique_ptr<ITitleSequencePlayer> _titleSequencePlayer;
     std::unique_ptr<GuestThoughtService> _guestThoughts;
     bool _closing = false;
+    bool _guestDecisionSettingsApplied = false;
 
 public:
-    GuestThoughtService* GetGuestThoughtService()
+    GuestThoughtService::Factory CreateGuestThoughtFactory()
     {
+        const auto directory = Path::GetDirectory(Platform::GetCurrentExecutablePath());
+        const auto runtime = Path::Combine(directory, "guest-thoughts");
+        const auto modelDirectory = Path::Combine(directory, "models");
+        const auto model = Ui::GetGuestThoughtModelPath();
+        const auto forceCpu = Config::Get().interface.guestThoughtForceCpu;
+        return [runtime, modelDirectory, model, forceCpu] {
+            GuestThoughtBackendOptions options;
+            options.forceCpu = forceCpu;
+            for (const auto& entry : LoadGuestThoughtModels(modelDirectory))
+            {
+                if (Path::Equals(entry.path, model))
+                {
+                    if (!entry.available)
+                        throw std::runtime_error("Selected guest thought model is not fully installed.");
+                    options.instruct = entry.instruct;
+                    options.modelBytes = entry.bytes;
+                    options.allowCpuFallback = entry.allowCpuFallback;
+                    options.firstPersonPrefill = entry.firstPersonPrefill;
+                    break;
+                }
+            }
+            return CreateLlamaGuestThoughtBackend(runtime, model, options);
+        };
+    }
+
+    void ApplyGuestThoughtSettings()
+    {
+        if (_guestThoughts)
+            _guestThoughts->reconfigure(Config::Get().interface.guestThoughts ? CreateGuestThoughtFactory() : nullptr);
+    }
+
+    GuestThoughtService* GetGuestThoughtService(bool enabledOnly)
+    {
+        if (!enabledOnly)
+            return _guestThoughts.get();
 #ifdef ENABLE_GUEST_THOUGHTS
         if (!_closing && Config::Get().interface.guestThoughts)
         {
             if (!_guestThoughts)
             {
-                const auto directory = Path::GetDirectory(Platform::GetCurrentExecutablePath());
-                const auto runtime = Path::Combine(directory, "guest-thoughts");
-                const auto& overridePath = Config::Get().interface.guestThoughtModel;
-                const auto model = overridePath.empty()
-                    ? Path::Combine(directory, "models", "qwen2.5-1.5b-instruct-q8_0.gguf")
-                    : overridePath;
-                const auto forceCpu = Config::Get().interface.guestThoughtForceCpu;
-                _guestThoughts = std::make_unique<GuestThoughtService>(
-                    [runtime, model, forceCpu] { return CreateLlamaGuestThoughtBackend(runtime, model, forceCpu); });
+                _guestThoughts = std::make_unique<GuestThoughtService>(CreateGuestThoughtFactory());
             }
             return _guestThoughts.get();
         }
@@ -159,6 +189,7 @@ public:
     ~UiContext() override
     {
         _closing = true;
+        ShutdownGuestDecisions();
         _guestThoughts.reset();
         UiContext::CloseWindow();
         SDL_QuitSubSystem(SDL_INIT_VIDEO);
@@ -174,6 +205,11 @@ public:
 
     void Tick() override
     {
+        if (!_guestDecisionSettingsApplied)
+        {
+            Ui::ApplyGuestDecisionSettings();
+            _guestDecisionSettingsApplied = true;
+        }
         _inGameConsole.Update();
 
         _windowManager->UpdateMapTooltip();
@@ -1137,8 +1173,50 @@ ShortcutManager& Ui::GetShortcutManager()
     return uiContext.GetShortcutManager();
 }
 
-GuestThoughtService* Ui::GetGuestThoughtService()
+GuestThoughtService* Ui::GetGuestThoughtService(bool enabledOnly)
 {
     auto& uiContext = static_cast<UiContext&>(GetContext()->GetUiContext());
-    return uiContext.GetGuestThoughtService();
+    return uiContext.GetGuestThoughtService(enabledOnly);
+}
+
+std::string Ui::GetGuestThoughtModelPath()
+{
+    const auto& configured = Config::Get().interface.guestThoughtModel;
+    if (!configured.empty() && (Path::IsAbsolute(configured) || Path::GetFileName(configured) != configured))
+        return configured;
+    const auto directory = Path::GetDirectory(Platform::GetCurrentExecutablePath());
+    return Path::Combine(directory, "models", configured.empty() ? "qwen2.5-1.5b-instruct-q8_0.gguf" : configured);
+}
+
+void Ui::ApplyGuestThoughtSettings()
+{
+    auto& uiContext = static_cast<UiContext&>(GetContext()->GetUiContext());
+    uiContext.ApplyGuestThoughtSettings();
+}
+
+void Ui::ApplyGuestDecisionSettings()
+{
+#ifdef ENABLE_GUEST_THOUGHTS
+    if (Config::Get().interface.guestDecisions)
+    {
+        const auto directory = Path::GetDirectory(Platform::GetCurrentExecutablePath());
+        const auto runtime = Path::Combine(directory, "guest-thoughts");
+        const auto models = Path::Combine(directory, "models", "guest-decisions");
+        const auto id = Config::Get().interface.guestDecisionModel;
+        ConfigureGuestDecisions([runtime, models, id] {
+            for (const auto& model : LoadGuestDecisionModels(models))
+            {
+                if (model.id == id)
+                {
+                    if (!model.available)
+                        throw std::runtime_error("Selected guest decision model is not installed or is incomplete.");
+                    return CreateLlamaGuestDecisionBackend(runtime, Path::Combine(models, id));
+                }
+            }
+            throw std::runtime_error("Unknown guest decision model in configuration.");
+        });
+        return;
+    }
+#endif
+    ConfigureGuestDecisions(nullptr);
 }

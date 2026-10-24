@@ -13,6 +13,8 @@
  */
 
 #include <cmath>
+#include <openrct2-ui/UiContext.h>
+#include <openrct2-ui/guest/LlamaGuestThoughtBackend.h>
 #include <openrct2-ui/interface/Dropdown.h>
 #include <openrct2-ui/interface/Theme.h>
 #include <openrct2-ui/interface/Widget.h>
@@ -28,6 +30,7 @@
 #include <openrct2/audio/AudioContext.h>
 #include <openrct2/config/Config.h>
 #include <openrct2/core/EnumUtils.hpp>
+#include <openrct2/core/Path.hpp>
 #include <openrct2/drawing/ColourMap.h>
 #include <openrct2/drawing/Drawing.Screen.h>
 #include <openrct2/drawing/Drawing.String.h>
@@ -45,6 +48,7 @@
 #include <openrct2/localisation/LocalisationService.h>
 #include <openrct2/localisation/StringWithArgs.h>
 #include <openrct2/network/Network.h>
+#include <openrct2/peep/GuestDecision.h>
 #include <openrct2/platform/Platform.h>
 #include <openrct2/rct1/Csg.h>
 #include <openrct2/ride/RideAudio.h>
@@ -260,6 +264,19 @@ namespace OpenRCT2::Ui::Windows
         WIDX_IMPORT_EMSCRIPTEN_DATA,
 #endif
         WIDX_ASSET_PACKS,
+#ifdef ENABLE_GUEST_THOUGHTS
+        WIDX_GROUP_GUEST_THOUGHTS,
+        WIDX_GUEST_THOUGHTS_ENABLED,
+        WIDX_GUEST_THOUGHT_MODEL_LABEL,
+        WIDX_GUEST_THOUGHT_MODEL,
+        WIDX_GUEST_THOUGHT_MODEL_DROPDOWN,
+        WIDX_GROUP_GUEST_DECISIONS,
+        WIDX_GUEST_DECISIONS_ENABLED,
+        WIDX_GUEST_DECISION_MODEL_LABEL,
+        WIDX_GUEST_DECISION_MODEL,
+        WIDX_GUEST_DECISION_MODEL_DROPDOWN,
+        WIDX_GUEST_DECISION_STATUS,
+#endif
     };
 
     // clang-format off
@@ -469,6 +486,19 @@ namespace OpenRCT2::Ui::Windows
         makeWidget        ({150, kAdvancedStart + 46}, {150, 14}, WidgetType::button,       WindowColour::secondary, STR_IMPORT_EMSCRIPTEN,                     kStringIdNone                                ), // Emscripten data import
 #endif
         makeWidget        ({150, kAdvancedStart + 64}, {150, 14}, WidgetType::button,       WindowColour::secondary, STR_EDIT_ASSET_PACKS_BUTTON,               kStringIdNone                                )  // Asset packs
+#ifdef ENABLE_GUEST_THOUGHTS
+        , makeWidget      ({  5, kAdvancedStart + 68}, {300, 70}, WidgetType::groupbox,     WindowColour::secondary, STR_GROUP_GUEST_THOUGHTS                                                                )
+        , makeWidget      ({ 10, kAdvancedStart + 84}, {290, 12}, WidgetType::checkbox,     WindowColour::secondary, STR_ENABLE_GUEST_THOUGHTS,                 STR_GUEST_THOUGHT_MODEL_TIP                  )
+        , makeWidget      ({ 10, kAdvancedStart +100}, {290, 12}, WidgetType::label,        WindowColour::secondary, STR_GUEST_THOUGHT_MODEL                                                                 )
+        , makeWidget      ({ 10, kAdvancedStart +115}, {290, 14}, WidgetType::dropdownMenu, WindowColour::secondary, kStringIdNone,                             STR_GUEST_THOUGHT_MODEL_TIP                  )
+        , makeWidget      ({288, kAdvancedStart +116}, { 11, 12}, WidgetType::button,       WindowColour::secondary, STR_DROPDOWN_GLYPH,                        STR_GUEST_THOUGHT_MODEL_TIP                  )
+        , makeWidget      ({  5, kAdvancedStart +144}, {300, 86}, WidgetType::groupbox,     WindowColour::secondary, STR_GROUP_GUEST_DECISIONS )
+        , makeWidget      ({ 10, kAdvancedStart +160}, {290, 12}, WidgetType::checkbox,     WindowColour::secondary, STR_ENABLE_GUEST_DECISIONS, STR_GUEST_DECISION_MODEL_TIP )
+        , makeWidget      ({ 10, kAdvancedStart +176}, {290, 12}, WidgetType::label,        WindowColour::secondary, STR_GUEST_DECISION_MODEL )
+        , makeWidget      ({ 10, kAdvancedStart +191}, {290, 14}, WidgetType::dropdownMenu, WindowColour::secondary, kStringIdNone, STR_GUEST_DECISION_MODEL_TIP )
+        , makeWidget      ({288, kAdvancedStart +192}, { 11, 12}, WidgetType::button,       WindowColour::secondary, STR_DROPDOWN_GLYPH, STR_GUEST_DECISION_MODEL_TIP )
+        , makeWidget      ({ 10, kAdvancedStart +210}, {290, 12}, WidgetType::label,        WindowColour::secondary, kStringIdNone, STR_GUEST_DECISION_MODEL_TIP )
+#endif
     );
 
     static constexpr std::span<const Widget> window_options_page_widgets[] = {
@@ -495,6 +525,41 @@ namespace OpenRCT2::Ui::Windows
     class OptionsWindow final : public Window
     {
         u8string _dropdownCaption{};
+#ifdef ENABLE_GUEST_THOUGHTS
+        std::vector<GuestThoughtModel> _guestThoughtModels;
+        std::vector<GuestDecisionModel> _guestDecisionModels;
+        std::string _decisionCaption, _decisionStatus;
+
+        void RefreshGuestDecisionModels()
+        {
+            try
+            {
+                const auto directory = Path::GetDirectory(Platform::GetCurrentExecutablePath());
+                _guestDecisionModels = LoadGuestDecisionModels(Path::Combine(directory, "models", "guest-decisions"));
+            }
+            catch (const std::exception& e)
+            {
+                _guestDecisionModels.clear();
+                LOG_ERROR("Guest decision model catalogue: %s", e.what());
+                ContextShowError(STR_GUEST_DECISION_MODELS_UNAVAILABLE, kStringIdNone, {});
+            }
+        }
+
+        void RefreshGuestThoughtModels()
+        {
+            try
+            {
+                const auto directory = Path::GetDirectory(Platform::GetCurrentExecutablePath());
+                _guestThoughtModels = LoadGuestThoughtModels(Path::Combine(directory, "models"));
+            }
+            catch (const std::exception& e)
+            {
+                _guestThoughtModels.clear();
+                LOG_ERROR("Guest thought model catalogue: %s", e.what());
+                ContextShowError(STR_GUEST_THOUGHT_MODELS_UNAVAILABLE, kStringIdNone, {});
+            }
+        }
+#endif
 
     public:
         void onOpen() override
@@ -659,6 +724,10 @@ namespace OpenRCT2::Ui::Windows
         void onUpdate() override
         {
             CommonUpdate();
+#ifdef ENABLE_GUEST_THOUGHTS
+            if (page == WINDOW_OPTIONS_PAGE_ADVANCED && currentFrame % 20 == 0)
+                invalidateWidget(WIDX_GUEST_DECISION_STATUS);
+#endif
 
             switch (page)
             {
@@ -2014,6 +2083,20 @@ namespace OpenRCT2::Ui::Windows
         {
             switch (widgetIndex)
             {
+#ifdef ENABLE_GUEST_THOUGHTS
+                case WIDX_GUEST_DECISIONS_ENABLED:
+                    Config::Get().interface.guestDecisions = !Config::Get().interface.guestDecisions;
+                    ApplyGuestDecisionSettings();
+                    Config::Save();
+                    invalidate();
+                    break;
+                case WIDX_GUEST_THOUGHTS_ENABLED:
+                    Config::Get().interface.guestThoughts = !Config::Get().interface.guestThoughts;
+                    ApplyGuestThoughtSettings();
+                    Config::Save();
+                    invalidate();
+                    break;
+#endif
                 case WIDX_DEBUGGING_TOOLS:
                     Config::Get().general.debuggingTools ^= 1;
                     Config::Save();
@@ -2098,6 +2181,49 @@ namespace OpenRCT2::Ui::Windows
 
             switch (widgetIndex)
             {
+#ifdef ENABLE_GUEST_THOUGHTS
+                case WIDX_GUEST_DECISION_MODEL_DROPDOWN:
+                {
+                    RefreshGuestDecisionModels();
+                    if (_guestDecisionModels.empty())
+                        break;
+                    for (size_t i = 0; i < _guestDecisionModels.size(); ++i)
+                    {
+                        const auto& model = _guestDecisionModels[i];
+                        gDropdown.items[i] = Dropdown::MenuLabel(
+                            model.available ? model.label
+                                            : FormatStringID(STR_GUEST_THOUGHT_MODEL_NOT_INSTALLED, model.label.c_str()));
+                    }
+                    ShowDropdown(widget, static_cast<int32_t>(_guestDecisionModels.size()));
+                    for (size_t i = 0; i < _guestDecisionModels.size(); ++i)
+                    {
+                        gDropdown.items[i].setDisabled(!_guestDecisionModels[i].available);
+                        gDropdown.items[i].setChecked(_guestDecisionModels[i].id == Config::Get().interface.guestDecisionModel);
+                    }
+                    break;
+                }
+                case WIDX_GUEST_THOUGHT_MODEL_DROPDOWN:
+                {
+                    RefreshGuestThoughtModels();
+                    if (_guestThoughtModels.empty())
+                        break;
+                    const auto selected = GetGuestThoughtModelPath();
+                    for (size_t i = 0; i < _guestThoughtModels.size(); ++i)
+                    {
+                        const auto& model = _guestThoughtModels[i];
+                        gDropdown.items[i] = Dropdown::MenuLabel(
+                            model.available ? model.label
+                                            : FormatStringID(STR_GUEST_THOUGHT_MODEL_NOT_INSTALLED, model.label.c_str()));
+                    }
+                    ShowDropdown(widget, static_cast<int32_t>(_guestThoughtModels.size()));
+                    for (size_t i = 0; i < _guestThoughtModels.size(); ++i)
+                    {
+                        gDropdown.items[i].setDisabled(!_guestThoughtModels[i].available);
+                        gDropdown.items[i].setChecked(Path::Equals(_guestThoughtModels[i].path, selected));
+                    }
+                    break;
+                }
+#endif
                 case WIDX_AUTOSAVE_FREQUENCY_DROPDOWN:
                     for (size_t i = AUTOSAVE_EVERY_MINUTE; i <= AUTOSAVE_NEVER; i++)
                     {
@@ -2130,6 +2256,28 @@ namespace OpenRCT2::Ui::Windows
         {
             switch (widgetIndex)
             {
+#ifdef ENABLE_GUEST_THOUGHTS
+                case WIDX_GUEST_DECISION_MODEL_DROPDOWN:
+                    if (dropdownIndex >= 0 && static_cast<size_t>(dropdownIndex) < _guestDecisionModels.size()
+                        && _guestDecisionModels[dropdownIndex].available)
+                    {
+                        Config::Get().interface.guestDecisionModel = _guestDecisionModels[dropdownIndex].id;
+                        ApplyGuestDecisionSettings();
+                        Config::Save();
+                        invalidate();
+                    }
+                    break;
+                case WIDX_GUEST_THOUGHT_MODEL_DROPDOWN:
+                    if (dropdownIndex >= 0 && static_cast<size_t>(dropdownIndex) < _guestThoughtModels.size()
+                        && _guestThoughtModels[dropdownIndex].available)
+                    {
+                        Config::Get().interface.guestThoughtModel = Path::GetFileName(_guestThoughtModels[dropdownIndex].path);
+                        ApplyGuestThoughtSettings();
+                        Config::Save();
+                        invalidate();
+                    }
+                    break;
+#endif
                 case WIDX_AUTOSAVE_FREQUENCY_DROPDOWN:
                     if (dropdownIndex != Config::Get().general.autosaveFrequency)
                     {
@@ -2143,6 +2291,51 @@ namespace OpenRCT2::Ui::Windows
 
         void AdvancedPrepareDraw()
         {
+#ifdef ENABLE_GUEST_THOUGHTS
+            setCheckboxValue(WIDX_GUEST_DECISIONS_ENABLED, Config::Get().interface.guestDecisions);
+            _decisionCaption = Config::Get().interface.guestDecisionModel;
+            for (const auto& model : _guestDecisionModels)
+                if (model.id == Config::Get().interface.guestDecisionModel)
+                    _decisionCaption = model.label;
+            widgets[WIDX_GUEST_DECISION_MODEL].setString(_decisionCaption.c_str());
+            setWidgetDisabled(WIDX_GUEST_DECISION_MODEL, !Config::Get().interface.guestDecisions);
+            setWidgetDisabled(WIDX_GUEST_DECISION_MODEL_DROPDOWN, !Config::Get().interface.guestDecisions);
+            const auto stats = GetGuestDecisionStats();
+            StringId status = STR_GUEST_DECISIONS_DISABLED;
+            switch (stats.status)
+            {
+                case GuestDecisionStatus::loading:
+                    status = STR_GUEST_DECISIONS_LOADING;
+                    break;
+                case GuestDecisionStatus::ready:
+                    status = STR_GUEST_DECISIONS_ACTIVE;
+                    break;
+                case GuestDecisionStatus::unavailable:
+                    status = STR_GUEST_DECISIONS_UNAVAILABLE;
+                    break;
+                case GuestDecisionStatus::suspended:
+                    status = STR_GUEST_DECISIONS_SUSPENDED;
+                    break;
+                case GuestDecisionStatus::disabled:
+                    break;
+            }
+            _decisionStatus = FormatStringID(status, stats.applied);
+            widgets[WIDX_GUEST_DECISION_STATUS].setString(_decisionStatus.c_str());
+            setCheckboxValue(WIDX_GUEST_THOUGHTS_ENABLED, Config::Get().interface.guestThoughts);
+            const auto selected = GetGuestThoughtModelPath();
+            _dropdownCaption = Path::GetFileName(selected);
+            for (const auto& model : _guestThoughtModels)
+            {
+                if (Path::Equals(model.path, selected))
+                {
+                    _dropdownCaption = model.label;
+                    break;
+                }
+            }
+            widgets[WIDX_GUEST_THOUGHT_MODEL].setString(_dropdownCaption.c_str());
+            setWidgetDisabled(WIDX_GUEST_THOUGHT_MODEL_DROPDOWN, !Config::Get().interface.guestThoughts);
+            setWidgetDisabled(WIDX_GUEST_THOUGHT_MODEL, !Config::Get().interface.guestThoughts);
+#endif
             if (!Config::Get().general.rct1Path.empty())
             {
                 widgets[WIDX_PATH_TO_RCT1_PATH].setVisible();
@@ -2240,6 +2433,13 @@ namespace OpenRCT2::Ui::Windows
             page = p;
             currentFrame = 0;
             setWidgets(window_options_page_widgets[page]);
+#ifdef ENABLE_GUEST_THOUGHTS
+            if (page == WINDOW_OPTIONS_PAGE_ADVANCED)
+            {
+                RefreshGuestThoughtModels();
+                RefreshGuestDecisionModels();
+            }
+#endif
 
             invalidate();
             onPrepareDraw();

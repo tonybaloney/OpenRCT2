@@ -18,6 +18,7 @@
 #include "../config/Config.h"
 #include "../core/DataSerialiser.h"
 #include "../core/Guard.hpp"
+#include "../core/Json.hpp"
 #include "../core/Numerics.hpp"
 #include "../core/String.hpp"
 #include "../entity/Balloon.h"
@@ -39,6 +40,7 @@
 #include "../object/PathAdditionEntry.h"
 #include "../object/PeepAnimationsObject.h"
 #include "../object/WallSceneryEntry.h"
+#include "../peep/GuestDecision.h"
 #include "../peep/PeepAnimations.h"
 #include "../peep/PeepThoughts.h"
 #include "../peep/RideUseSystem.h"
@@ -461,7 +463,7 @@ namespace OpenRCT2
     static bool Loc690FD0(Guest& guest, RideId* rideToView, uint8_t* rideSeatToView, TileElement* tileElement);
     static void GuestUpdateWalkingBreakScenery(Guest& guest);
     static bool GuestFindRideToLookAt(Guest& guest, uint8_t edge, RideId* rideToView, uint8_t* rideSeatToView);
-    static bool GuestShouldGoToShop(Guest& guest, Ride& ride, bool peepAtShop);
+    static bool GuestShouldGoToShop(Guest& guest, Ride& ride, bool peepAtShop, bool dryRun = false);
     static bool GuestShouldRideWhileRaining(Guest& guest, const Ride& ride);
     static void GuestPickRideToGoOn(Guest& guest);
     static Ride* GuestFindBestRideToGoOn(Guest& guest);
@@ -1875,14 +1877,137 @@ namespace OpenRCT2
         return mostExcitingRide;
     }
 
+    bool Guest::canConsiderForDecision(Ride& ride)
+    {
+        return shouldGoOnRide(ride, StationIndex::FromUnderlying(0), false, true, true);
+    }
+
+    std::optional<GuestDecisionSnapshot> Guest::captureDecision()
+    {
+        if (state != PeepState::walking || outsideOfPark || peepFlags.has(PeepFlag::leavingPark)
+            || peepFlags.has(PeepFlag::positionFrozen) || x == kLocationNull)
+            return std::nullopt;
+
+        GuestDecisionSnapshot snapshot;
+        snapshot.guest = CaptureGuestNarrative(*this, !getGameState().park.flags.has(ParkFlag::noMoney));
+        snapshot.heading = guestHeadingToRideId.ToUnderlying();
+        snapshot.tick = getGameState().currentTicks;
+        snapshot.minimumIntensity = intensity.getMinimum();
+        snapshot.maximumIntensity = intensity.getMaximum();
+        snapshot.nauseaTolerance = EnumValue(nauseaTolerance);
+        const auto known = GuestFindRidesToGoOn(*this);
+        const bool carrying = hasFoodOrDrink();
+        const bool food = hunger <= 10 && !carrying;
+        const bool drink = thirst <= 25 && !carrying;
+        const bool bathroom = toilet >= 160 && !carrying;
+        const bool aid = nausea >= 200;
+        const bool urgent = food || drink || bathroom || aid;
+        const bool cash = snapshot.guest.moneyEnabled && cashInPocket <= 9.00_GBP && happiness >= 105 && energy >= 70;
+
+        // Give every applicable goal category room before adding alternatives.
+        std::array<std::vector<std::pair<int32_t, GuestDecisionCandidate>>, 6> groups;
+        for (auto& ride : RideManager(getGameState()))
+        {
+            const auto index = ride.id.ToUnderlying();
+            if (index >= known.size() || !known[index] || ride.flags.has(RideFlag::queueFull)
+                || ride.getStation().start.isNull())
+                continue;
+            const auto& descriptor = ride.getRideTypeDescriptor();
+            const auto distance = abs(ride.getStation().start.x - x) + abs(ride.getStation().start.y - y);
+            const char* goal = nullptr;
+            size_t group{};
+            if (food && descriptor.flags.has(RtdFlag::sellsFood))
+                goal = "food";
+            else if (drink && descriptor.flags.has(RtdFlag::sellsDrinks))
+                goal = "drink", group = 1;
+            else if (bathroom && descriptor.specialType == RtdSpecialType::toilet)
+                goal = "toilet", group = 2;
+            else if (
+                aid && descriptor.specialType == RtdSpecialType::firstAid
+                && abs(ride.getStation().start.x - Numerics::floor2(x, 32)) <= 10 * kCoordsXYStep
+                && abs(ride.getStation().start.y - Numerics::floor2(y, 32)) <= 10 * kCoordsXYStep)
+                goal = "first_aid", group = 3;
+            else if (cash && descriptor.specialType == RtdSpecialType::cashMachine)
+                goal = "cash_machine", group = 4;
+            else if (
+                !urgent && !carrying && !descriptor.flags.has(RtdFlag::isShopOrFacility) && RideHasRatings(ride)
+                && !hasRidden(ride))
+                goal = "ride", group = 5;
+            if (!goal || !canConsiderForDecision(ride))
+                continue;
+            json_t details = {
+                { "goal", goal },
+                { "distance_tiles", distance / kCoordsXYStep },
+                { "price_raw_tenths", snapshot.guest.moneyEnabled ? RideGetPrice(ride) : 0 },
+                { "queue_guests", ride.getStation().queueLength },
+                { "already_heading_here", ride.id == guestHeadingToRideId },
+            };
+            if (group == 5)
+            {
+                details["excitement"] = ride.ratings.excitement / 100.0;
+                details["intensity"] = ride.ratings.intensity / 100.0;
+                details["nausea"] = ride.ratings.nausea / 100.0;
+            }
+            groups[group].emplace_back(distance, GuestDecisionCandidate{ index, details.dump(), ride.getName() });
+        }
+        for (auto& group : groups)
+            std::stable_sort(group.begin(), group.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+        for (size_t rank = 0; rank < kGuestDecisionMaxCandidates && snapshot.candidates.size() < kGuestDecisionMaxCandidates;
+             ++rank)
+            for (const auto& group : groups)
+                if (rank < group.size() && snapshot.candidates.size() < kGuestDecisionMaxCandidates)
+                    snapshot.candidates.push_back(group[rank].second);
+        if (snapshot.candidates.size() < 2)
+            return std::nullopt;
+        return snapshot;
+    }
+
+    bool Guest::applyDecision(const GuestDecisionSnapshot& snapshot, uint16_t rideId, std::string* rejection)
+    {
+        const auto reject = [&](const char* reason) {
+            if (rejection)
+                *rejection = reason;
+            return false;
+        };
+        if (rejection)
+            rejection->clear();
+        if (snapshot.guest.guestId != peepId || snapshot.guest.entityId != id.ToUnderlying())
+            return reject("guest_identity_changed");
+        if (getGameState().currentTicks - snapshot.tick > 512)
+            return reject("result_older_than_512_ticks");
+        const auto current = captureDecision();
+        if (!current)
+            return reject("guest_or_options_no_longer_eligible");
+        if (current->freshnessKey() != snapshot.freshnessKey())
+            return reject("guest_state_or_heading_changed");
+        if (std::none_of(current->candidates.begin(), current->candidates.end(), [rideId](const auto& candidate) {
+                return candidate.rideId == rideId;
+            }))
+            return reject("selected_target_no_longer_eligible");
+        if (guestHeadingToRideId.ToUnderlying() != rideId)
+        {
+            guestHeadingToRideId = RideId::FromUnderlying(rideId);
+            guestIsLostCountdown = 200;
+            timeLost = 0;
+            resetPathfindGoal();
+            windowInvalidateFlags |= PEEP_INVALIDATE_PEEP_ACTION;
+        }
+        return true;
+    }
+
     /**
      * This function is called whenever a peep is deciding whether or not they want
      * to go on a ride or visit a shop. They may be physically present at the
      * ride/shop, or they may just be thinking about it.
      *  rct2: 0x006960AB
      */
-    bool Guest::shouldGoOnRide(Ride& ride, StationIndex entranceNum, bool atQueue, bool thinking)
+    bool Guest::shouldGoOnRide(Ride& ride, StationIndex entranceNum, bool atQueue, bool thinking, bool dryRun)
     {
+        assert(!dryRun || thinking);
+        const auto reject = [&](bool updateLastRide) {
+            if (!dryRun)
+                choseNotToGoOnRide(ride, !thinking, updateLastRide);
+        };
         // Indicates whether a peep is physically at the ride, or is just thinking about going on the ride.
         bool peepAtRide = !thinking;
 
@@ -1895,14 +2020,14 @@ namespace OpenRCT2
             {
                 if (peepFlags.has(PeepFlag::leavingPark))
                 {
-                    choseNotToGoOnRide(ride, peepAtRide, false);
+                    reject(false);
                     return false;
                 }
             }
 
             if (ride.getRideTypeDescriptor().flags.has(RtdFlag::isShopOrFacility))
             {
-                return GuestShouldGoToShop(*this, ride, peepAtRide);
+                return GuestShouldGoToShop(*this, ride, peepAtRide, dryRun);
             }
 
             // This used to check !(flags & 2), but the function is only ever called with flags = 0, 1 or 6.
@@ -1956,7 +2081,7 @@ namespace OpenRCT2
             {
                 if (previousRide == ride.id)
                 {
-                    choseNotToGoOnRide(ride, peepAtRide, false);
+                    reject(false);
                     return false;
                 }
 
@@ -1977,7 +2102,7 @@ namespace OpenRCT2
                                 insertNewThought(PeepThoughtType::cantAffordRide, ride.id);
                             }
                         }
-                        choseNotToGoOnRide(ride, peepAtRide, true);
+                        reject(true);
                         return false;
                     }
                 }
@@ -1994,7 +2119,7 @@ namespace OpenRCT2
                         }
                         ride.updatePopularity(0);
                     }
-                    choseNotToGoOnRide(ride, peepAtRide, true);
+                    reject(true);
                     return false;
                 }
 
@@ -2006,7 +2131,8 @@ namespace OpenRCT2
                     {
                         if (ride.ratings.intensity > RideRating::make(10, 00) && !gameState.cheats.ignoreRideIntensity)
                         {
-                            GuestRideIsTooIntense(*this, ride, peepAtRide);
+                            if (!dryRun)
+                                GuestRideIsTooIntense(*this, ride, peepAtRide);
                             return false;
                         }
                     }
@@ -2024,7 +2150,7 @@ namespace OpenRCT2
                                 }
                                 ride.updatePopularity(0);
                             }
-                            choseNotToGoOnRide(ride, peepAtRide, true);
+                            reject(true);
                             return false;
                         }
                         // If it is raining and the ride provides shelter skip the
@@ -2049,12 +2175,13 @@ namespace OpenRCT2
                                         }
                                         ride.updatePopularity(0);
                                     }
-                                    choseNotToGoOnRide(ride, peepAtRide, true);
+                                    reject(true);
                                     return false;
                                 }
                                 if (ride.ratings.intensity > maxIntensity)
                                 {
-                                    GuestRideIsTooIntense(*this, ride, peepAtRide);
+                                    if (!dryRun)
+                                        GuestRideIsTooIntense(*this, ride, peepAtRide);
                                     return false;
                                 }
 
@@ -2072,14 +2199,14 @@ namespace OpenRCT2
                                         }
                                         ride.updatePopularity(0);
                                     }
-                                    choseNotToGoOnRide(ride, peepAtRide, true);
+                                    reject(true);
                                     return false;
                                 }
 
                                 // Very nauseous peeps will only go on very gentle rides.
                                 if (ride.ratings.nausea >= RideRating::make(1, 40) && nausea > 160)
                                 {
-                                    choseNotToGoOnRide(ride, peepAtRide, false);
+                                    reject(false);
                                     return false;
                                 }
                             }
@@ -2091,9 +2218,12 @@ namespace OpenRCT2
                 // there's a 90% chance that the peep will ignore it.
                 if (!RideHasRatings(ride) && ride.getRideTypeDescriptor().flags.has(RtdFlag::checkGForces))
                 {
+                    // Candidate discovery must not consume simulation randomness.
+                    if (dryRun)
+                        return false;
                     if ((ScenarioRand() & 0xFFFF) > 0x1999u)
                     {
-                        choseNotToGoOnRide(ride, peepAtRide, false);
+                        reject(false);
                         return false;
                     }
 
@@ -2102,7 +2232,7 @@ namespace OpenRCT2
                         if (ride.maxPositiveVerticalG > MakeFixed16_2dp(5, 00)
                             || ride.maxNegativeVerticalG < MakeFixed16_2dp(-4, 00) || ride.maxLateralG > MakeFixed16_2dp(4, 00))
                         {
-                            choseNotToGoOnRide(ride, peepAtRide, false);
+                            reject(false);
                             return false;
                         }
                     }
@@ -2131,7 +2261,7 @@ namespace OpenRCT2
                             }
                             ride.updatePopularity(0);
                         }
-                        choseNotToGoOnRide(ride, peepAtRide, true);
+                        reject(true);
                         return false;
                     }
 
@@ -2156,25 +2286,30 @@ namespace OpenRCT2
                 ride.updatePopularity(1);
             }
 
-            if (ride.id == guestHeadingToRideId)
+            if (!dryRun && ride.id == guestHeadingToRideId)
             {
                 GuestResetRideHeading(*this);
             }
 
-            ride.flags.unset(RideFlag::queueFull);
+            if (!dryRun)
+                ride.flags.unset(RideFlag::queueFull);
             return true;
         }
 
-        choseNotToGoOnRide(ride, peepAtRide, false);
+        reject(false);
         return false;
     }
 
-    static bool GuestShouldGoToShop(Guest& guest, Ride& ride, bool peepAtShop)
+    static bool GuestShouldGoToShop(Guest& guest, Ride& ride, bool peepAtShop, bool dryRun)
     {
+        const auto reject = [&] {
+            if (!dryRun)
+                guest.choseNotToGoOnRide(ride, peepAtShop, true);
+        };
         // Peeps won't go to the same shop twice in a row.
         if (ride.id == guest.previousRide)
         {
-            guest.choseNotToGoOnRide(ride, peepAtShop, true);
+            reject();
             return false;
         }
 
@@ -2183,7 +2318,7 @@ namespace OpenRCT2
         {
             if (guest.toilet < 70)
             {
-                guest.choseNotToGoOnRide(ride, peepAtShop, true);
+                reject();
                 return false;
             }
 
@@ -2200,7 +2335,7 @@ namespace OpenRCT2
                     }
                     ride.updatePopularity(0);
                 }
-                guest.choseNotToGoOnRide(ride, peepAtShop, true);
+                reject();
                 return false;
             }
         }
@@ -2209,7 +2344,7 @@ namespace OpenRCT2
         {
             if (guest.nausea < 128)
             {
-                guest.choseNotToGoOnRide(ride, peepAtShop, true);
+                reject();
                 return false;
             }
         }
@@ -2229,7 +2364,7 @@ namespace OpenRCT2
                     guest.insertNewThought(PeepThoughtType::cantAffordRide, ride.id);
                 }
             }
-            guest.choseNotToGoOnRide(ride, peepAtShop, true);
+            reject();
             return false;
         }
 
@@ -6949,8 +7084,7 @@ namespace OpenRCT2
     RideId GetPeepThoughtRideId(const PeepThought& thought)
     {
         const auto index = EnumValue(thought.type);
-        if (index < std::size(PeepThoughtToActionMap)
-            && (PeepThoughtToActionMap[index].flags & PEEP_THOUGHT_ACTION_FLAG_RIDE))
+        if (index < std::size(PeepThoughtToActionMap) && (PeepThoughtToActionMap[index].flags & PEEP_THOUGHT_ACTION_FLAG_RIDE))
             return thought.rideId;
         return RideId::GetNull();
     }

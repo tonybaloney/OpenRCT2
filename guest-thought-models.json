@@ -1,0 +1,128 @@
+{
+    "licenses": [
+        {
+            "file": "Qwen-LICENSE",
+            "repository": "Qwen/Qwen2.5-1.5B-Instruct",
+            "revision": "989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+            "sha256": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e"
+        },
+        {
+            "file": "Qwen2.5-3B-LICENSE",
+            "repository": "Qwen/Qwen2.5-3B",
+            "revision": "3aab1f1954e9cc14eb9509a215f9e5ca08227a9b",
+            "sha256": "ef52482bb785733093dc9a2e8edd8e764c77d12d8e9d8f10a80c9b547d32d0f9"
+        }
+    ],
+    "models": [
+        {
+            "label": "Qwen2.5-0.5B-Instruct (Q8_0)",
+            "allowCpuFallback": true,
+            "firstPersonPrefill": true,
+            "repository": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+            "revision": "9217f5db79a29953eb74d5343926648285ec7e67",
+            "instruct": true,
+            "license": "Qwen-LICENSE",
+            "files": [
+                { "name": "qwen2.5-0.5b-instruct-q8_0.gguf", "size": 675710816, "sha256": "ca59ca7f13d0e15a8cfa77bd17e65d24f6844b554a7b6c12e07a5f89ff76844e" }
+            ]
+        },
+        {
+            "label": "Qwen2.5-1.5B-Instruct (Q8_0)",
+            "allowCpuFallback": true,
+            "repository": "Qwen/Qwen2.5-1.5B-Instruct-GGUF",
+            "revision": "91cad51170dc346986eccefdc2dd33a9da36ead9",
+            "instruct": true,
+            "license": "Qwen-LICENSE",
+            "files": [
+                { "name": "qwen2.5-1.5b-instruct-q8_0.gguf", "size": 1894532128, "sha256": "d7efb072e7724d25048a4fda0a3e10b04bdef5d06b1403a1c93bd9f1240a63c8" }
+            ]
+        },
+        {
+            "label": "Qwen2.5-3B (Q4_K_M)",
+            "repository": "mradermacher/Qwen2.5-3B-GGUF",
+            "revision": "d5884d1db30ca6fb21abc095a75405ac1839ccf0",
+            "instruct": false,
+            "license": "Qwen2.5-3B-LICENSE",
+            "files": [
+                { "name": "Qwen2.5-3B.Q4_K_M.gguf", "size": 1929903040, "sha256": "c377d1746ff76f15e986612f3e778241f1f309d1f57ea87f8439f8244a02e56f" }
+            ]
+        },
+        {
+            "label": "Qwen2.5-3B-Instruct (Q4_K_M)",
+            "repository": "Qwen/Qwen2.5-3B-Instruct-GGUF",
+            "revision": "7dabda4d13d513e3e842b20f0d435c732f172cbe",
+            "instruct": true,
+            "license": "Qwen2.5-3B-LICENSE",
+            "files": [
+                { "name": "qwen2.5-3b-instruct-q4_k_m.gguf", "size": 2104932768, "sha256": "626b4a6678b86442240e33df819e00132d3ba7dddfe1cdc4fbb18e0a9615c62d" }
+            ]
+        },
+        {
+            "label": "Qwen2.5-7B (Q4_K_M)",
+            "repository": "mradermacher/Qwen2.5-7B-GGUF",
+            "revision": "70758bc7e4ea7671578fdcb3fbc62e6d2870e66c",
+            "instruct": false,
+            "license": "Qwen-LICENSE",
+            "files": [
+                { "name": "Qwen2.5-7B.Q4_K_M.gguf", "size": 4683073984, "sha256": "c1c8899139b014b35d0b205e99319a8de73cf122c615b5cb0d2cd28c8a97b4d2" }
+            ]
+        },
+        {
+            "label": "Qwen2.5-7B-Instruct (Q4_K_M)",
+            "repository": "Qwen/Qwen2.5-7B-Instruct-GGUF",
+            "revision": "bb5d59e06d9551d752d08b292a50eb208b07ab1f",
+            "instruct": true,
+            "license": "Qwen-LICENSE",
+            "files": [
+                { "name": "qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf", "size": 3993201344, "sha256": "dfce12e3862a5283ccfb88221b48480e58745165de856439950d0f22590580db" },
+                { "name": "qwen2.5-7b-instruct-q4_k_m-00002-of-00002.gguf", "size": 689872288, "sha256": "539cf93f78e887edea1c04e2d7d8cdaca9d01dae9c9025bcb8accbe29df3d72a" }
+            ]
+        },
+        {
+            "label": "Qwen2.5-14B (Q4_K_M)",
+            "repository": "mradermacher/Qwen2.5-14B-GGUF",
+            "revision": "d0a2788fa6dc8e83ce2f0aae07882eeecb06ef1f",
+            "instruct": false,
+            "license": "Qwen-LICENSE",
+            "files": [
+                { "name": "Qwen2.5-14B.Q4_K_M.gguf", "size": 8988110720, "sha256": "597e04a092b2ca80a66741a0dd4b5f7bc291e2077ede3fb312cb51b48b53c9a2" }
+            ]
+        },
+        {
+            "label": "Qwen2.5-14B-Instruct (Q4_K_M)",
+            "repository": "Qwen/Qwen2.5-14B-Instruct-GGUF",
+            "revision": "b466e1f8c07172155743e8e1307507d8a4f91fbd",
+            "instruct": true,
+            "license": "Qwen-LICENSE",
+            "files": [
+                { "name": "qwen2.5-14b-instruct-q4_k_m-00001-of-00003.gguf", "size": 3991999872, "sha256": "a09ea5e7b1eafb1b30b241726c3cc3c905c96f14ad41e246ffa5f44e53904f68" },
+                { "name": "qwen2.5-14b-instruct-q4_k_m-00002-of-00003.gguf", "size": 3989373504, "sha256": "21b9457d079680d284e90ef69607c4b2d8ef64a09d4729cb7b5e1357bdba41ae" },
+                { "name": "qwen2.5-14b-instruct-q4_k_m-00003-of-00003.gguf", "size": 1006737120, "sha256": "c8d37006760a387a35216e070e6664d7da927f10be8eb870fef2e3d4833d9976" }
+            ]
+        },
+        {
+            "label": "Qwen2.5-32B (Q4_K_M)",
+            "repository": "mradermacher/Qwen2.5-32B-GGUF",
+            "revision": "6151f108d5d9de96170217935d35f313271c1672",
+            "instruct": false,
+            "license": "Qwen-LICENSE",
+            "files": [
+                { "name": "Qwen2.5-32B.Q4_K_M.gguf", "size": 19851336320, "sha256": "fa42a4067e3630929202b6bb1ef5cebc43c1898494aedfd567b7d53c7a9d84a6" }
+            ]
+        },
+        {
+            "label": "Qwen2.5-32B-Instruct (Q4_K_M)",
+            "repository": "Qwen/Qwen2.5-32B-Instruct-GGUF",
+            "revision": "a15e3cc10f8bbb2c0af6f8f1f34a32e3b060c09d",
+            "instruct": true,
+            "license": "Qwen-LICENSE",
+            "files": [
+                { "name": "qwen2.5-32b-instruct-q4_k_m-00001-of-00005.gguf", "size": 3961498272, "sha256": "403434e5c845452c013661d586b97d5a53cf207462d180a07c301eafa9390d05" },
+                { "name": "qwen2.5-32b-instruct-q4_k_m-00002-of-00005.gguf", "size": 3948996064, "sha256": "7371e5c5d717a8c20f526dbfce5d3f201dc3f02140d1c836314cd0756e02e8d7" },
+                { "name": "qwen2.5-32b-instruct-q4_k_m-00003-of-00005.gguf", "size": 3993478688, "sha256": "f023ccc294c3bd3b2eac5b2dd40dea3aa4ca1d06c7460ead67c36386cd62e8fc" },
+                { "name": "qwen2.5-32b-instruct-q4_k_m-00004-of-00005.gguf", "size": 3950347744, "sha256": "05fe76d941454390cd7aa0de3b342f83a1d1226a959479af85bbfae7cd93e771" },
+                { "name": "qwen2.5-32b-instruct-q4_k_m-00005-of-00005.gguf", "size": 3997015616, "sha256": "8c2e8ecc686129c37821bd9f3b3e251e6ae80deadd3d3348f7e3e84492a63c24" }
+            ]
+        }
+    ]
+}

@@ -57,6 +57,11 @@ namespace OpenRCT2
         state.snapshot = std::move(snapshot);
         ++state.revision;
         state.result = {};
+        if (!_factory)
+        {
+            state.result.status = Status::unavailable;
+            return;
+        }
         if (_activeTicket == ticket && _activeCancellation)
             *_activeCancellation = true;
         if (std::find(_pending.begin(), _pending.end(), ticket) == _pending.end())
@@ -101,15 +106,55 @@ namespace OpenRCT2
         _changed.notify_one();
     }
 
+    void GuestThoughtService::reconfigure(Factory factory)
+    {
+        std::lock_guard lock(_mutex);
+        _factory = std::move(factory);
+        ++_backendRevision;
+        if (_activeCancellation)
+            *_activeCancellation = true;
+        _pending.clear();
+        for (auto& [ticket, state] : _states)
+        {
+            ++state.revision;
+            state.nextAllowed = {};
+            state.result = { Status::unavailable, {} };
+            if (_factory && !state.key.empty())
+            {
+                if (_pending.size() < 32)
+                {
+                    state.result = {};
+                    _pending.push_back(ticket);
+                }
+                else
+                {
+                    LOG_WARNING("Guest thought queue is full after model selection.");
+                }
+            }
+        }
+        if (!_pending.empty() && !_worker.joinable())
+            _worker = std::thread(&GuestThoughtService::run, this);
+        _changed.notify_one();
+    }
+
     void GuestThoughtService::run()
     {
         std::unique_ptr<IGuestThoughtBackend> backend;
+        uint64_t backendRevision{};
         std::unique_lock lock(_mutex);
         while (!_stop)
         {
+            if (backendRevision != _backendRevision)
+            {
+                backendRevision = _backendRevision;
+                lock.unlock();
+                backend.reset();
+                lock.lock();
+                continue;
+            }
             if (_pending.empty())
             {
-                _changed.wait(lock, [&] { return _stop || !_pending.empty(); });
+                _changed.wait(lock, [&] { return _stop || !_pending.empty() || backendRevision != _backendRevision; });
                 continue;
             }
             const auto now = std::chrono::steady_clock::now();
@@ -139,12 +184,13 @@ namespace OpenRCT2
             _activeTicket = ticket;
             auto cancelled = std::make_shared<std::atomic_bool>(false);
             _activeCancellation = cancelled;
+            const auto factory = _factory;
             lock.unlock();
             Result result;
             try
             {
                 if (!backend)
-                    backend = _factory();
+                    backend = factory();
                 if (!backend)
                     throw std::runtime_error("Guest thought backend was not created.");
                 const auto raw = backend->generate(snapshot, *cancelled);

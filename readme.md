@@ -121,16 +121,62 @@ The model occupies approximately 1.9 GB in `bin\models`; DLLs and license notice
 in `bin\guest-thoughts`. These generated dependencies are not committed. Subsequent unchanged
 MSBuild builds do not redownload them.
 
+Choose **Options > Advanced > Experimental guest thoughts > Language model** to switch models
+without restarting. The selection is saved; switching cancels obsolete work and frees the old model
+on the worker before loading the next one. Existing guest windows keep their subscriptions.
+The checkbox disables generation and unloads the model in the background.
+
+The model-free portable ZIP includes the game/runtime but no model weights or original RCT2 assets.
+Extract the whole archive, then download the default narration model from its root:
+
+```powershell
+.\scripts\download-guest-models.ps1
+```
+
+Run `START.cmd` afterward. The launcher keeps a fresh local `profile` beside the packaged `bin` directory.
+Use `-Model qwen2.5-3b-instruct-q4_k_m.gguf` for a specific narration model, `-DecisionModels`
+to also prepare both D3 classifiers, or `-AllModels` for the complete narration catalogue and both
+D3 classifiers. The complete collection uses more than 75 GB, plus conversion inputs and temporary files.
+Downloads are pinned, SHA256-verified, resumable for narration, and reused when already correct.
+Split GGUF models download all required shards. D3 conversion uses the bundled native ARM64 Node runtime;
+no developer toolchain or Python installation is needed in the portable package.
+The script does not download game assets; supply your own RCT2 installation/data as usual.
+
+The checksum-pinned `guest-thought-models.json` catalogue retains 0.5B and 1.5B Instruct Q8_0,
+and adds Qwen2.5 3B, 7B, 14B, and 32B **base and Instruct** variants at **Q4_K_M**.
+Install the complete collection in advance with:
+
+```powershell
+.\scripts\prepare-guest-thoughts.ps1 -AllModels
+```
+
+This downloads roughly 74 GB including the small models. Downloads resume after network failures,
+and every file is SHA256-verified before publication. All shards of split models are required;
+incomplete entries are disabled in the picker. Normal builds provision only the default 1.5B model,
+runtime, catalogue, and licenses, not the entire collection. The official Instruct GGUFs come from
+Qwen; base GGUFs come from mradermacher, with original Qwen model licenses included.
+
+Instruct models use their chat templates. Base models use a plain-text few-shot completion prompt,
+not a fabricated chat template; their behavior is experimental and the same grounding checks apply.
+The new 3B-32B entries require CUDA unless CPU is explicitly forced for diagnostics, and check
+free GPU memory against weight sizes plus 1 GiB of context/headroom before loading.
+The 72B Q4_K_M weights alone exceed this machine's approximately 31 GiB GPU memory allocation,
+so that size is deliberately excluded. Only one selected narration model is loaded, not the whole collection.
+
 Open a guest's **Thoughts** tab to generate a state-conditioned English reflection automatically.
 Only open Thoughts tabs request inference. The runtime uses CUDA first, including integrated
-CUDA devices, with a logged CPU fallback for recoverable failures. Text is limited to 16 words,
-96 Unicode characters, and three rendered lines. Generated text replaces the displayed native list,
+CUDA devices, with a logged CPU fallback for recoverable failures on the original small models. The prompt requests
+one short first-person paragraph of two to four sentences, aiming for 30-50 words. Text is limited to 60 words,
+360 Unicode characters, and twelve rendered lines, further shortened if needed to fit the current window height.
+The generation budget is 192 tokens within a 2,048-token context. Generated text replaces the displayed native list,
 with `Thinking...` while pending; the engine's internal thoughts and simulation behavior are unchanged.
 Inference never downloads files or calls a network service; missing dependencies or
-rejected output show `Thoughts unavailable` while the native thoughts remain usable.
+rejected output restores the native thoughts.
 
 The `[interface]` section of `config.ini` supports `guest_thoughts = false` to disable generation,
-`guest_thought_model` to override the GGUF path, and `guest_thought_force_cpu = true` for diagnostics.
+`guest_thought_model` to select an executable-relative catalogue filename or override the GGUF path,
+and `guest_thought_force_cpu = true` for diagnostics. Custom models outside the catalogue retain
+the original instruction-tuned chat-template behavior.
 To build without the feature or its provisioning, append `/p:EnableGuestThoughts=false`.
 Other Windows architectures default to disabled. CMake exposes `ENABLE_GUEST_THOUGHTS` and
 `GUEST_THOUGHT_RUNTIME` for the equivalent ARM64 UI build.
@@ -150,14 +196,134 @@ checks require the prepared dependencies:
 
 ```cmd
 cd bin
-tests.exe --gtest_filter=GuestThoughtModel.* --gtest_also_run_disabled_tests
+tests.exe --gtest_filter=GuestThoughtModel.*-GuestThoughtModel.DISABLED_InstalledCatalogCuda --gtest_also_run_disabled_tests
 ```
 
-The llama.cpp runtime carries its MIT notice, Qwen its Apache 2.0 notice, and OpenMP its LLVM
+The complete collection also has an opt-in sequential CUDA-only load-and-generation check:
+
+```cmd
+cd bin
+tests.exe --gtest_filter=GuestThoughtModel.DISABLED_InstalledCatalogCuda --gtest_also_run_disabled_tests
+```
+
+Set `OPENRCT2_GUEST_THOUGHT_TEST_MODEL` to one catalogue GGUF filename to restrict that check.
+CPU fallback is disallowed in this check, and the runtime logs its layer-offload summary.
+
+The llama.cpp runtime carries its MIT notice, most listed Qwen models their Apache 2.0 notice,
+the 3B variants their separate Qwen license, and OpenMP its LLVM
 notice. CUDA libraries retain NVIDIA's separate license terms. This is a local experimental
 setup, not a redistribution bundle; review all component and game license requirements before
 distributing binaries. A tiny model can still produce inaccurate text; deterministic validation
 rejects common contradictions but is not a general factuality guarantee.
+
+### Experimental guest decision controllers
+
+**Options > Advanced > Experimental guest decisions** has an independent enable checkbox and
+**Decision model** picker for **D3-Lite (0.8B)** and **D3-Edge (0.6B)**. Decisions are **off by
+default**, with D3-Lite selected. They affect walking guests throughout the park, not only guests
+whose windows are open. Narration remains a separate, presentation-only feature.
+
+Prepare both models once, after the ordinary ARM64 inference-runtime setup:
+
+```powershell
+node .\scripts\prepare-guest-decisions.mjs
+```
+
+This requires Node.js and Windows curl, not Python or PyTorch. The catalogue pins both official
+`vllm-sr` revisions. Setup verifies every downloaded input against the pinned upstream manifest,
+converts the text backbones to F16 GGUF, and preserves the FP32 255-code classifier readouts,
+Apache 2.0 licenses and notices under `bin\models\guest-decisions`. Original verified
+safetensors are retained for reproducibility. Models are not downloaded by normal builds or by
+the running game. The two prepared GGUFs occupy about 1.0 GB and 1.5 GB, plus runtime memory;
+these are classifiers, not extra Qwen thought-generation models.
+
+The existing pinned CUDA DLLs perform a non-causal prompt forward pass, with the original causal
+DeltaNet scans and per-layer attention layout. The final hidden state feeds the model's dedicated
+FP32 readout. As in upstream `permutation_average`, both option orders are scored and their aligned
+probabilities averaged. No prose is parsed into commands, and no downloaded Python code executes.
+The vision tower is omitted because guest decisions are text-only. F16 conversion and llama.cpp
+numerics are not claimed to be bit-identical to upstream BF16 PyTorch inference.
+
+Immutable snapshots contain actual current motives, cash, intensity preferences, nausea tolerance
+and bounded, known, natively eligible destinations. Urgent physiological needs exclude recreational
+rides from the candidates; cash machines can remain an alternative when money is low. At most eight
+choices are offered. If fewer than two exist, native selection continues. A tiny classifier can
+misrank choices: both models sometimes preferred a ride over food in an unrestricted calibration probe,
+so neither model is allowed to bypass the native eligibility and urgent-need filtering.
+
+A bounded worker queue admits at most four decisions per second **across the entire park**, with
+round-robin guest selection and a 30-second per-guest cooldown. Each decision uses two forward
+passes; this is not one inference per guest per simulation tick. Narration and decisions share a
+GPU-work mutex, but keep separate model contexts. Switching decision models cancels old requests
+and unloads the previous decision model on the worker, without joining on the UI thread. CUDA is
+required; insufficient free GPU memory produces an explicit unavailable status rather than a
+CPU fallback. The settings panel reports loading, active/applied count, suspended, or unavailable.
+
+The **D3 tab in the park-wide Guests window** shows a live, newest-first feed of the last 128
+completed decisions, model status, accepted/native/stale counters, and queued requests. Each row
+shows the guest, outcome, top-scored destination, model score and elapsed time including queueing.
+Click a row to open that guest's **D3 tab**, which shows their latest request and all offered
+destinations with score bars. Green bars mark accepted choices, not guaranteed correctness.
+An accepted choice can keep the existing target; the views distinguish that from changing it.
+Low-confidence and stale results explicitly show native fallback. Scores are model probabilities
+over the offered choices, not calibrated certainty. Only eligible walking guests are sampled;
+guests without two destinations may have no record. These diagnostic records are bounded,
+client-local, cleared on park/model changes and never saved.
+
+Results older than five wall-clock seconds or 512 simulation ticks, reused guest IDs, changed
+motives/intents, and newly ineligible targets are rejected on the simulation thread. Low confidence,
+timeouts and failures leave native behavior running. Approved choices update the existing target,
+lost countdown and navigation reset; native pathfinding, queue entry, payments, purchases, rides,
+benches, bins and departure logic remain authoritative. The controller does not use scenario RNG
+or add entity/save fields. Existing chosen targets can persist in saves, just like native targets;
+worker requests and model state do not.
+
+This experimental controller is **single-player only** and is suspended in title/editor modes,
+network games, replay recording, playback and normalisation. Asynchronous model decisions are not
+recorded/synchronised for replay or multiplayer. Park/entity resets cancel outstanding work.
+`[interface]` configuration uses `guest_decisions` and `guest_decision_model` (`d3-lite` or `d3-edge`).
+The controller shares the experimental build's `EnableGuestThoughts` / `ENABLE_GUEST_THOUGHTS`
+capability gate; disabling that capability also removes its inference backend and settings.
+
+Model-free controller tests run with the ordinary suite. The opt-in real CUDA classifier and
+native-goal application checks run from `bin`:
+
+```cmd
+tests.exe --gtest_filter=GuestDecisionModel.*:GuestDecisionIntegration.DISABLED_InstalledD3Controller --gtest_also_run_disabled_tests
+```
+
+#### Tracing and comparing a saved park
+
+After building the test executable and installing the chosen decision model, run:
+
+```powershell
+.\scripts\compare-guest-decisions.ps1 -Park "C:\parks\example.park" -Seconds 300 -Model d3-lite
+```
+
+Omit `-Park` to use the repository's populated Blackpool test park. Use `-OutputDirectory` to
+choose a new results directory; otherwise a timestamped directory is created under ignored `bin`.
+The opt-in headless experiment reloads the same save for native-only and model-enabled variants,
+checks equal initial entity checksums, scenario RNG and metrics, and advances each for the same
+number of ticks at 40 ticks/second. It does not overwrite the save, use the personal UI profile,
+enable narration, change confidence thresholds or change the production prompt. Each variant
+takes the specified real-time duration when the CPU keeps up; actual wall time and slow-tick
+counts are recorded. Avoid other GPU inference workloads while comparing.
+
+`model-decisions.jsonl` contains submitted and completed events with frozen guest state, the
+exact prompt, offered destination attributes, scores, incumbent/selected IDs, confidence margins,
+and acceptance or explicit fallback/revalidation reasons. Tracing is opt-in through the
+simulation-thread `SetGuestDecisionTraceSink` API; normal gameplay does not write trace files.
+A trace-write failure is logged, disables that sink and is reported to the experiment.
+
+`comparison.json` reports start/end and time-mean park metrics, customer totals, controller
+outcomes and timing. `analysis.json` separates confidence for existing versus alternative
+destinations, and the per-second metric files are also exported as CSV. For up to 64 systematically
+sampled decisions with an incumbent among the options, `incumbent-ablation.jsonl` additionally
+rescores the identical state/options with incumbent metadata hidden or assigned to a different
+option. These interventions change both `current_destination` and `already_heading_here`, not
+guest needs, prices, distances or ratings. They test classifier sensitivity, not counterfactual
+park performance. One short paired run cannot establish long-term benefits; model timing is
+asynchronous and repeated runs/seeds and longer horizons are needed for stronger conclusions.
 
 ---
 

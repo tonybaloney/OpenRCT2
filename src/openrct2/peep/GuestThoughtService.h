@@ -49,6 +49,7 @@ namespace OpenRCT2
         Result read(uint64_t ticket);
         void release(uint64_t ticket);
         void reset();
+        void reconfigure(Factory factory);
 
     private:
         struct State
@@ -69,6 +70,7 @@ namespace OpenRCT2
         std::thread _worker;
         std::shared_ptr<std::atomic_bool> _activeCancellation;
         uint64_t _activeTicket{}, _nextTicket{};
+        uint64_t _backendRevision{};
         bool _stop{};
     };
 } // namespace OpenRCT2

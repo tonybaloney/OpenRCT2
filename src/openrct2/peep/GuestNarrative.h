@@ -16,9 +16,9 @@
 
 namespace OpenRCT2
 {
-    constexpr size_t kGuestNarrativeMaxWords = 16;
-    constexpr size_t kGuestNarrativeMaxCharacters = 96;
-    constexpr int32_t kGuestNarrativeMaxLines = 3;
+    constexpr size_t kGuestNarrativeMaxWords = 60;
+    constexpr size_t kGuestNarrativeMaxCharacters = 360;
+    constexpr int32_t kGuestNarrativeMaxLines = 12;
 
     struct Guest;
 

@@ -16,6 +16,8 @@ set(test_files
    "${CMAKE_CURRENT_SOURCE_DIR}/EnumMapTest.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/FormattingTests.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/GuestNarrativeTests.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/GuestDecisionTests.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/GuestDecisionExperiment.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/GuestThoughtServiceTests.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/GuestThoughtModelTests.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/ImageImporterTests.cpp"

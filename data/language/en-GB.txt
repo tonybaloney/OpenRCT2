@@ -3872,3 +3872,35 @@ STR_7078    :Pine green
 STR_7079    :Ruby
 STR_7080    :Deep blue
 STR_7081    :Silver
+STR_7082    :Experimental guest thoughts
+STR_7083    :Generate guest thoughts with a local model
+STR_7084    :Language model:
+STR_7085    :Switches models in the background, with only one loaded at a time. Base models use completion prompting.
+STR_7086    :Guest thought model catalogue is missing or invalid
+STR_7087    :{STRING} (not installed)
+STR_7088    :Experimental guest decisions
+STR_7089    :Let a local model choose guest destinations
+STR_7090    :Single-player only. Chooses rides and needed facilities in the background, at most four decisions per second across the park. Native pathfinding and admission checks remain in control. Disabled during replay recording and playback.
+STR_7091    :Guest decision model catalogue is missing or invalid
+STR_7092    :Off - native guest decisions
+STR_7093    :Waiting for eligible guests / loading model
+STR_7094    :Active: {INT32} destinations applied
+STR_7095    :Unavailable - native decisions; see log
+STR_7096    :Suspended - single-player parks only
+STR_7097    :Decision model:
+STR_7098    :Guest model decisions
+STR_7099    :No model decision for this guest yet
+STR_7100    :Waiting for model decision...
+STR_7101    :Applied - destination changed
+STR_7102    :Accepted - already heading there
+STR_7103    :Native fallback - low confidence
+STR_7104    :Native fallback - stale result
+STR_7105    :{INT32}s ago | {INT32}ms including queue
+STR_7106    :Model scores, not certainty. Green = accepted.
+STR_7107    :Accepted: {INT32} | Native: {INT32} | Stale: {INT32} | Pending: {INT32}
+STR_7108    :No completed decisions yet. Unpause a populated single-player park.
+STR_7109    :Recent decisions, newest first. Click a guest to inspect choices.
+STR_7110    :{INT32}%
+STR_7111    :Model's top choice: {STRING}
+STR_7112    :Only walking guests with at least two eligible destinations are considered. Scans and inference are budgeted; each guest has a 30-second cooldown.
+STR_7113    :Model: {STRING}

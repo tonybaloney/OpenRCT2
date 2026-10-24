@@ -1,9 +1,11 @@
 param(
     [string]$Root = (Split-Path $PSScriptRoot -Parent),
     [string]$RuntimeDirectory,
-    [string]$OutputDirectory
+    [string]$OutputDirectory,
+    [switch]$AllModels
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'verified-model-download.ps1')
 $Root = [IO.Path]::GetFullPath($Root)
 if (!$RuntimeDirectory) {
     $RuntimeDirectory = Join-Path $Root '..\llama.cpp-builds\d775b896-windows-arm64-cuda-13.4\bin'
@@ -30,22 +32,6 @@ function Assert-Arm64([string]$Path) {
         }
     } finally {
         $reader.Dispose()
-    }
-}
-
-function Get-VerifiedDownload([string]$Url, [string]$Destination, [string]$Hash) {
-    if ((Test-Path -LiteralPath $Destination) -and
-        (Get-FileHash -LiteralPath $Destination -Algorithm SHA256).Hash -eq $Hash) { return }
-    $temporary = "$Destination.download"
-    try {
-        & curl.exe --fail --location --retry 3 --silent --show-error --output $temporary $Url
-        if ($LASTEXITCODE -ne 0) { throw "Download failed: $Url" }
-        if ((Get-FileHash -LiteralPath $temporary -Algorithm SHA256).Hash -ne $Hash) {
-            throw "SHA256 mismatch for $Destination"
-        }
-        Move-Item -LiteralPath $temporary -Destination $Destination -Force
-    } finally {
-        if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary }
     }
 }
 
@@ -94,5 +80,45 @@ $model = Join-Path $models $manifest.modelFile
 Get-VerifiedDownload "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/$($manifest.modelRevision)/$($manifest.modelFile)" $model $manifest.modelSha256
 Get-VerifiedDownload "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct/raw/$($manifest.modelLicenseRevision)/LICENSE" `
     (Join-Path $models 'Qwen-LICENSE') $manifest.modelLicenseSha256
+$catalogPath = Join-Path $Root 'guest-thought-models.json'
+$catalog = Get-Content -LiteralPath $catalogPath -Raw | ConvertFrom-Json
+foreach ($license in $catalog.licenses) {
+    Get-VerifiedDownload "https://huggingface.co/$($license.repository)/raw/$($license.revision)/LICENSE" `
+        (Join-Path $models $license.file) $license.sha256
+}
+Copy-Item -LiteralPath $catalogPath -Destination (Join-Path $models 'guest-thought-models.json') -Force
+if ($AllModels) {
+    $jobs = @()
+    $download = ${function:Get-VerifiedDownload}.ToString()
+    try {
+        foreach ($entry in $catalog.models) {
+            foreach ($file in $entry.files) {
+                $url = "https://huggingface.co/$($entry.repository)/resolve/$($entry.revision)/$($file.name)"
+                $jobs += Start-Job -ArgumentList $download, $url, (Join-Path $models $file.name), $file.sha256 -ScriptBlock {
+                    param($Definition, $Url, $Destination, $Hash)
+                    $ErrorActionPreference = 'Stop'
+                    & ([scriptblock]::Create($Definition)) $Url $Destination $Hash
+                }
+                if ($jobs.Count -ge 4) {
+                    $finished = $jobs | Wait-Job -Any
+                    $finished | Receive-Job -ErrorAction Stop
+                    $jobs = @($jobs | Where-Object { $_.Id -ne $finished.Id })
+                    $finished | Remove-Job
+                }
+            }
+        }
+        while ($jobs.Count -gt 0) {
+            $finished = $jobs | Wait-Job -Any
+            $finished | Receive-Job -ErrorAction Stop
+            $jobs = @($jobs | Where-Object { $_.Id -ne $finished.Id })
+            $finished | Remove-Job
+        }
+    } finally {
+        foreach ($job in $jobs) {
+            Stop-Job -Job $job
+            Remove-Job -Job $job -Force
+        }
+    }
+}
 Set-Content -LiteralPath (Join-Path $dependency 'prepared.stamp') -Value "$revision $($manifest.modelSha256)"
 Write-Output 'Prepared pinned ARM64 CUDA guest-thought runtime, headers, and verified model.'

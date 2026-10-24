@@ -7,6 +7,8 @@
  * OpenRCT2 is licensed under the GNU General Public License version 3.
  *****************************************************************************/
 
+#include "../guest/GuestDecisionView.h"
+
 #include <openrct2-ui/interface/Dropdown.h>
 #include <openrct2-ui/interface/Widget.h>
 #include <openrct2-ui/interface/Window.h>
@@ -14,6 +16,7 @@
 #include <openrct2/Context.h>
 #include <openrct2/GameState.h>
 #include <openrct2/SpriteIds.h>
+#include <openrct2/config/Config.h>
 #include <openrct2/core/Numerics.hpp>
 #include <openrct2/core/String.hpp>
 #include <openrct2/drawing/ColourMap.h>
@@ -55,6 +58,7 @@ namespace OpenRCT2::Ui::Windows
         WIDX_TRACKING,
         WIDX_TAB_1,
         WIDX_TAB_2,
+        WIDX_TAB_3,
         WIDX_GUEST_LIST
     };
 
@@ -71,6 +75,7 @@ namespace OpenRCT2::Ui::Windows
         makeWidget({321, 46}, { 24,  24}, WidgetType::flatBtn,      WindowColour::secondary, ImageId(SPR_TRACK_PEEP), STR_TRACKED_GUESTS_ONLY_TIP  ), // tracking
         makeTab   ({  3, 17},                                                                                         STR_INDIVIDUAL_GUESTS_TIP    ), // tab 1
         makeTab   ({ 34, 17},                                                                                         STR_SUMMARISED_GUESTS_TIP    ), // tab 2
+        makeTab   ({ 65, 17},                                                                                         STR_GUEST_DECISION_TAB      ), // tab 3
         makeWidget({  3, 72}, {344, 255}, WidgetType::scroll,       WindowColour::secondary, SCROLL_BOTH                                           ) // guest list
     );
     // clang-format on
@@ -81,7 +86,8 @@ namespace OpenRCT2::Ui::Windows
         enum class TabId
         {
             individual,
-            summarised
+            summarised,
+            decisions,
         };
 
         enum class GuestViewType
@@ -137,6 +143,7 @@ namespace OpenRCT2::Ui::Windows
         static constexpr auto kGuestsPerPage = 2000;
         static constexpr const auto kGuestPageHeight = kGuestsPerPage * kScrollableRowHeight;
         static constexpr size_t kMaxGroups = 240;
+        static constexpr int32_t kDecisionRowHeight = 46;
 
         TabId _selectedTab{};
         GuestViewType _selectedView{};
@@ -263,6 +270,8 @@ namespace OpenRCT2::Ui::Windows
             if (_tabAnimationIndex >= (_selectedTab == TabId::individual ? 24uL : 32uL))
                 _tabAnimationIndex = 0;
             invalidateWidget(WIDX_TAB_1 + static_cast<int32_t>(_selectedTab));
+            if (_selectedTab == TabId::decisions)
+                invalidate();
         }
 
         void onMouseUp(WidgetIndex widgetIndex) override
@@ -306,6 +315,7 @@ namespace OpenRCT2::Ui::Windows
             {
                 case WIDX_TAB_1:
                 case WIDX_TAB_2:
+                case WIDX_TAB_3:
                 {
                     if (_selectedFilter && _selectedTab == static_cast<TabId>(widgetIndex - WIDX_TAB_1))
                         break;
@@ -387,9 +397,13 @@ namespace OpenRCT2::Ui::Windows
         {
             setWidgetPressed(WIDX_TAB_1, false);
             setWidgetPressed(WIDX_TAB_2, false);
+            setWidgetPressed(WIDX_TAB_3, false);
             setWidgetPressed(WIDX_TAB_1 + static_cast<int32_t>(_selectedTab), true);
 
             widgets[WIDX_INFO_TYPE_DROPDOWN].text = GetViewName(_selectedView);
+            widgets[WIDX_INFO_TYPE_DROPDOWN].setVisible(_selectedTab != TabId::decisions);
+            widgets[WIDX_INFO_TYPE_DROPDOWN_BUTTON].setVisible(_selectedTab != TabId::decisions);
+            widgets[WIDX_GUEST_LIST].top = _selectedTab == TabId::decisions ? 104 : 72;
             widgets[WIDX_MAP].setVisible(_selectedTab == TabId::individual && _selectedFilter);
 
             widgets[WIDX_GUEST_LIST].right = width - 4;
@@ -409,6 +423,8 @@ namespace OpenRCT2::Ui::Windows
                 setWidgetPressed(WIDX_FILTER_BY_NAME, false);
                 _filterName.clear();
             }
+            if (_selectedTab == TabId::decisions)
+                _numPages = 1;
 
             bool haveMultiplePages = _numPages > 1;
             widgets[WIDX_PAGE_DROPDOWN].setVisible(haveMultiplePages);
@@ -425,6 +441,23 @@ namespace OpenRCT2::Ui::Windows
         {
             drawWidgets(rt);
             DrawTabImages(rt);
+            if (_selectedTab == TabId::decisions)
+            {
+                const auto stats = GetGuestDecisionStats();
+                DrawGuestDecisionText(
+                    rt, windowPos + ScreenCoordsXY{ 6, 46 }, width - 12,
+                    FormatStringID(GuestDecisionStatusLabel(stats.status), stats.applied));
+                DrawGuestDecisionText(
+                    rt, windowPos + ScreenCoordsXY{ 6, 60 }, width - 12,
+                    FormatStringID(STR_GUEST_DECISION_MODEL_NAME, Config::Get().interface.guestDecisionModel.c_str()));
+                DrawGuestDecisionText(
+                    rt, windowPos + ScreenCoordsXY{ 6, 74 }, width - 12,
+                    FormatStringID(
+                        STR_GUEST_DECISION_COUNTERS, stats.applied, stats.fallback, stats.stale,
+                        static_cast<uint32_t>(stats.outstanding)));
+                DrawGuestDecisionText(rt, windowPos + ScreenCoordsXY{ 6, 88 }, width - 12, STR_GUEST_DECISION_FEED_HINT);
+                return;
+            }
 
             // Filter description
             StringId format;
@@ -474,6 +507,9 @@ namespace OpenRCT2::Ui::Windows
             int32_t y = 0;
             switch (_selectedTab)
             {
+                case TabId::decisions:
+                    y = static_cast<int32_t>(GetGuestDecisionHistory().size()) * kDecisionRowHeight;
+                    break;
                 case TabId::individual:
                     // Count the number of guests
                     y = static_cast<int32_t>(_guestList.size()) * kScrollableRowHeight;
@@ -510,11 +546,13 @@ namespace OpenRCT2::Ui::Windows
                 invalidate();
             }
 
-            return { 447, y };
+            return { _selectedTab == TabId::decisions ? widgets[WIDX_GUEST_LIST].width() - 14 : 447, y };
         }
 
         void onScrollMouseOver(int32_t scrollIndex, const ScreenCoordsXY& screenCoords) override
         {
+            if (_selectedTab == TabId::decisions)
+                return;
             auto i = screenCoords.y / (_selectedTab == TabId::individual ? kScrollableRowHeight : kSummarisedGuestsRowHeight);
             i += static_cast<int32_t>(_selectedPage * kGuestsPerPage);
             if (static_cast<size_t>(i) != _highlightedIndex)
@@ -528,6 +566,19 @@ namespace OpenRCT2::Ui::Windows
         {
             switch (_selectedTab)
             {
+                case TabId::decisions:
+                {
+                    const auto index = static_cast<size_t>(screenCoords.y / kDecisionRowHeight);
+                    const auto& history = GetGuestDecisionHistory();
+                    if (index < history.size())
+                    {
+                        const auto& record = history[index];
+                        auto* guest = getGameState().entities.tryGetEntity<Guest>(EntityId::FromUnderlying(record.entityId));
+                        if (guest && guest->peepId == record.guestId)
+                            GuestDecisionsOpen(guest);
+                    }
+                    break;
+                }
                 case TabId::individual:
                 {
                     auto i = screenCoords.y / kScrollableRowHeight;
@@ -574,6 +625,9 @@ namespace OpenRCT2::Ui::Windows
                 getColourMap(colours[1].colour).midLight);
             switch (_selectedTab)
             {
+                case TabId::decisions:
+                    DrawScrollDecisions(rt);
+                    break;
                 case TabId::individual:
                     DrawScrollIndividual(rt);
                     break;
@@ -585,6 +639,8 @@ namespace OpenRCT2::Ui::Windows
 
         void RefreshList()
         {
+            if (_selectedTab == TabId::decisions)
+                return;
             // only the individual tab uses the GuestList so no point calculating it
             if (_selectedTab != TabId::individual)
             {
@@ -623,6 +679,8 @@ namespace OpenRCT2::Ui::Windows
     private:
         void DrawTabImages(RenderTarget& rt)
         {
+            DrawGuestDecisionText(
+                rt, windowPos + ScreenCoordsXY{ widgets[WIDX_TAB_3].left + 6, widgets[WIDX_TAB_3].top + 8 }, 20, "D3");
             // Tab 1 image
             auto i = (_selectedTab == TabId::individual ? _tabAnimationIndex & ~3 : 0);
             auto* animObj = findPeepAnimationsObjectForType(AnimationPeepType::guest);
@@ -636,6 +694,53 @@ namespace OpenRCT2::Ui::Windows
             GfxDrawSprite(
                 rt, ImageId(SPR_TAB_GUESTS_0 + i),
                 windowPos + ScreenCoordsXY{ widgets[WIDX_TAB_2].left, widgets[WIDX_TAB_2].top });
+        }
+
+        void DrawScrollDecisions(RenderTarget& rt)
+        {
+            const auto& history = GetGuestDecisionHistory();
+            if (history.empty())
+            {
+                DrawGuestDecisionHint(rt, { 5, 5 }, 320, STR_GUEST_DECISION_FEED_EMPTY);
+                return;
+            }
+            int32_t y{};
+            const auto rowWidth = widgets[WIDX_GUEST_LIST].width() - 16;
+            for (const auto& record : history)
+            {
+                if (y + kDecisionRowHeight > rt.y && y < rt.y + rt.height)
+                {
+                    DrawGuestDecisionText(rt, { 3, y }, 134, record.guestName);
+                    DrawGuestDecisionText(rt, { 140, y }, rowWidth - 140, GuestDecisionOutcomeLabel(record));
+                    if (!record.probabilities.empty())
+                    {
+                        const auto best = static_cast<size_t>(
+                            std::max_element(record.probabilities.begin(), record.probabilities.end())
+                            - record.probabilities.begin());
+                        const auto& name = record.snapshot.candidates[best].name;
+                        DrawGuestDecisionText(
+                            rt, { 3, y + 12 }, rowWidth - 3, FormatStringID(STR_GUEST_DECISION_CHOICE, name.c_str()));
+                        const auto score = record.probabilities[best];
+                        DrawGuestDecisionScore(
+                            rt, { rowWidth - 112, y + 29 }, 74, score,
+                            record.outcome == GuestDecisionOutcome::applied
+                                || record.outcome == GuestDecisionOutcome::unchanged);
+                        DrawGuestDecisionText(
+                            rt, { rowWidth - 34, y + 26 }, 34,
+                            FormatStringID(STR_GUEST_DECISION_SCORE_PERCENT, static_cast<int32_t>(score * 100 + 0.5f)));
+                    }
+                    const auto age = static_cast<int32_t>(
+                        std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - record.updated)
+                            .count());
+                    DrawGuestDecisionText(
+                        rt, { 3, y + 26 }, rowWidth - 120,
+                        FormatStringID(STR_GUEST_DECISION_AGE, age, record.elapsedMilliseconds));
+                    Rectangle::fill(
+                        rt, { 0, y + kDecisionRowHeight - 2, rowWidth, y + kDecisionRowHeight - 2 },
+                        getColourMap(colours[1].colour).midDark);
+                }
+                y += kDecisionRowHeight;
+            }
         }
 
         void DrawScrollIndividual(RenderTarget& rt)

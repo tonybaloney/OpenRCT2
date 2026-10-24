@@ -135,6 +135,8 @@ namespace OpenRCT2::Config
         bool guestThoughts;
         u8string guestThoughtModel;
         bool guestThoughtForceCpu;
+        bool guestDecisions;
+        u8string guestDecisionModel;
         bool toolbarButtonsCentred;
         bool toolbarShowFinances;
         bool toolbarShowResearch;

@@ -1,0 +1,16 @@
+{
+    "models": [
+        {
+            "id": "d3-edge",
+            "label": "D3-Edge (0.6B, F16)",
+            "repository": "vllm-sr/d3-edge",
+            "revision": "c454ee39b862248d70abd7f84195d2f54ffe6d43"
+        },
+        {
+            "id": "d3-lite",
+            "label": "D3-Lite (0.8B, F16)",
+            "repository": "vllm-sr/d3-lite",
+            "revision": "03560c26f5199c3c04129a2ccb38960c913635e0"
+        }
+    ]
+}

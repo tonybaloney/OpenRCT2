@@ -33,6 +33,7 @@ namespace OpenRCT2
     class Formatter;
     struct ObjectEntryDescriptor;
     struct Peep;
+    struct Guest;
     struct Ride;
     struct TileElement;
     struct Vehicle;
@@ -136,6 +137,7 @@ namespace OpenRCT2::Ui::Windows
 
     // Guest
     WindowBase* GuestOpen(Peep* peep);
+    WindowBase* GuestDecisionsOpen(Guest* guest);
 
     // GuestList
     WindowBase* GuestListOpen();

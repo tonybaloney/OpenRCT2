@@ -7,8 +7,9 @@
  * OpenRCT2 is licensed under the GNU General Public License version 3.
  *****************************************************************************/
 
-#include "../interface/ViewportQuery.h"
 #include "../UiContext.h"
+#include "../guest/GuestDecisionView.h"
+#include "../interface/ViewportQuery.h"
 
 #include <array>
 #include <openrct2-ui/interface/Dropdown.h>
@@ -26,8 +27,9 @@
 #include <openrct2/core/EnumUtils.hpp>
 #include <openrct2/core/String.hpp>
 #include <openrct2/drawing/ColourMap.h>
-#include <openrct2/drawing/Drawing.h>
 #include <openrct2/drawing/Drawing.String.h>
+#include <openrct2/drawing/Drawing.h>
+#include <openrct2/drawing/Font.h>
 #include <openrct2/drawing/PickupPeep.h>
 #include <openrct2/drawing/Rectangle.h>
 #include <openrct2/drawing/RenderTarget.h>
@@ -41,8 +43,8 @@
 #include <openrct2/network/Network.h>
 #include <openrct2/object/ObjectManager.h>
 #include <openrct2/object/PeepAnimationsObject.h>
-#include <openrct2/peep/PeepActionFormat.h>
 #include <openrct2/peep/GuestThoughtService.h>
+#include <openrct2/peep/PeepActionFormat.h>
 #include <openrct2/peep/PeepSpriteIds.h>
 #include <openrct2/ride/RideManager.hpp>
 #include <openrct2/ride/ShopItem.h>
@@ -66,6 +68,7 @@ namespace OpenRCT2::Ui::Windows
         WINDOW_GUEST_FINANCE,
         WINDOW_GUEST_THOUGHTS,
         WINDOW_GUEST_INVENTORY,
+        WINDOW_GUEST_DECISIONS,
         WINDOW_GUEST_DEBUG,
         WINDOW_GUEST_PAGE_COUNT,
     };
@@ -83,6 +86,7 @@ namespace OpenRCT2::Ui::Windows
         WIDX_TAB_5,
         WIDX_TAB_6,
         WIDX_TAB_7,
+        WIDX_TAB_8,
 
         WIDX_TAB_CONTENT_START,
 
@@ -117,6 +121,7 @@ namespace OpenRCT2::Ui::Windows
     };
 
     VALIDATE_GLOBAL_WIDX(WC_PEEP, WIDX_PICKUP);
+    VALIDATE_GLOBAL_WIDX(WC_PEEP, WIDX_ACTION_LBL);
 
     static constexpr int32_t kTabWidth = 30;
 
@@ -130,7 +135,8 @@ namespace OpenRCT2::Ui::Windows
         makeTab({ 96, 17 }, STR_SHOW_GUEST_FINANCE_TIP),                                  /* Tab 4 */
         makeTab({ 127, 17 }, STR_SHOW_GUEST_THOUGHTS_TIP),                                /* Tab 5 */
         makeTab({ 158, 17 }, STR_SHOW_GUEST_ITEMS_TIP),                                   /* Tab 6 */
-        makeTab({ 189, 17 }, STR_DEBUG_TIP)                                               /* Tab 7 */
+        makeTab({ 189, 17 }, STR_GUEST_DECISION_TAB),                                     /* Tab 7 */
+        makeTab({ 220, 17 }, STR_DEBUG_TIP)                                               /* Tab 8 */
     );
 
     static constexpr auto _guestWindowWidgetsOverview = makeWidgets(
@@ -193,6 +199,7 @@ namespace OpenRCT2::Ui::Windows
         _guestWindowWidgetsThoughts,
         _guestWindowWidgetsInventory,
         _guestWindowWidgetsDebug,
+        _guestWindowWidgetsDebug,
     };
     static_assert(std::size(_guestWindowPageWidgets) == WINDOW_GUEST_PAGE_COUNT);
     // clang-format on
@@ -204,6 +211,7 @@ namespace OpenRCT2::Ui::Windows
         std::array{ ScreenSize{ 210, 148 }, ScreenSize{ 210, 148 } }, // WINDOW_GUEST_FINANCE
         std::array{ ScreenSize{ 192, 159 }, ScreenSize{ 500, 450 } }, // WINDOW_GUEST_THOUGHTS
         std::array{ ScreenSize{ 192, 159 }, ScreenSize{ 500, 450 } }, // WINDOW_GUEST_INVENTORY
+        std::array{ ScreenSize{ 300, 370 }, ScreenSize{ 500, 450 } }, // WINDOW_GUEST_DECISIONS
         std::array{ ScreenSize{ 192, 171 }, ScreenSize{ 192, 171 } }, // WINDOW_GUEST_DEBUG
     };
     static_assert(_guestWindowPageSizes.size() == WINDOW_GUEST_PAGE_COUNT);
@@ -225,7 +233,7 @@ namespace OpenRCT2::Ui::Windows
         {
             if (_thoughtTicket != 0)
             {
-                if (auto* service = GetGuestThoughtService())
+                if (auto* service = GetGuestThoughtService(false))
                     service->release(_thoughtTicket);
                 _thoughtTicket = 0;
             }
@@ -238,19 +246,20 @@ namespace OpenRCT2::Ui::Windows
             auto* service = GetGuestThoughtService();
             if (!service)
             {
+                if (_replaceNativeThoughts)
+                    invalidate();
                 _generatedThought.clear();
                 _replaceNativeThoughts = false;
                 return;
             }
             if (_thoughtTicket == 0)
                 _thoughtTicket = service->subscribe();
-            service->update(
-                _thoughtTicket, CaptureGuestNarrative(guest, !getGameState().park.flags.has(ParkFlag::noMoney)));
+            service->update(_thoughtTicket, CaptureGuestNarrative(guest, !getGameState().park.flags.has(ParkFlag::noMoney)));
             const auto result = service->read(_thoughtTicket);
             const auto replaceNative = result.status != GuestThoughtService::Status::unavailable;
             const auto text = result.status == GuestThoughtService::Status::ready ? result.text
-                : result.status == GuestThoughtService::Status::pending          ? "Thinking..."
-                                                                                : "Thoughts unavailable";
+                : result.status == GuestThoughtService::Status::pending           ? "Thinking..."
+                                                                                  : "Thoughts unavailable";
             if (text != _generatedThought || replaceNative != _replaceNativeThoughts)
             {
                 _generatedThought = text;
@@ -280,6 +289,11 @@ namespace OpenRCT2::Ui::Windows
             setPage(WINDOW_GUEST_OVERVIEW);
         }
 
+        void showDecisions()
+        {
+            setPage(WINDOW_GUEST_DECISIONS);
+        }
+
         void onClose() override
         {
             releaseGeneratedThought();
@@ -301,6 +315,7 @@ namespace OpenRCT2::Ui::Windows
                 case WIDX_TAB_5:
                 case WIDX_TAB_6:
                 case WIDX_TAB_7:
+                case WIDX_TAB_8:
                     setPage(widx - WIDX_TAB_1);
                     return;
             }
@@ -338,6 +353,7 @@ namespace OpenRCT2::Ui::Windows
                 case WINDOW_GUEST_FINANCE:
                 case WINDOW_GUEST_THOUGHTS:
                 case WINDOW_GUEST_INVENTORY:
+                case WINDOW_GUEST_DECISIONS:
                 case WINDOW_GUEST_DEBUG:
                     onResizeCommon();
                     break;
@@ -367,6 +383,10 @@ namespace OpenRCT2::Ui::Windows
                     break;
                 case WINDOW_GUEST_DEBUG:
                     onUpdateDebug();
+                    break;
+                case WINDOW_GUEST_DECISIONS:
+                    if (GetGuest())
+                        invalidate();
                     break;
             }
         }
@@ -429,6 +449,9 @@ namespace OpenRCT2::Ui::Windows
                     break;
                 case WINDOW_GUEST_DEBUG:
                     onDrawDebug(rt);
+                    break;
+                case WINDOW_GUEST_DECISIONS:
+                    onDrawDecisions(rt);
                     break;
             }
         }
@@ -495,7 +518,7 @@ namespace OpenRCT2::Ui::Windows
             auto maxSize = _guestWindowPageSizes[page][1];
 
             // Ensure min size is large enough for all tabs to fit
-            for (int32_t i = WIDX_TAB_1; i <= WIDX_TAB_7; i++)
+            for (int32_t i = WIDX_TAB_1; i <= WIDX_TAB_8; i++)
             {
                 if (!widgetIsDisabled(*this, i))
                 {
@@ -505,6 +528,14 @@ namespace OpenRCT2::Ui::Windows
             maxSize.width = std::max(minSize.width, maxSize.width);
 
             WindowSetResize(*this, minSize, maxSize);
+            if (page == WINDOW_GUEST_DECISIONS)
+            {
+                WindowMoveAndSnap(
+                    *this,
+                    { std::clamp(windowPos.x, 0, std::max(0, ContextGetWidth() - width)),
+                      std::min(windowPos.y, std::max(30, ContextGetHeight() - height)) },
+                    0);
+            }
         }
 
         void onPrepareDrawCommon()
@@ -522,7 +553,7 @@ namespace OpenRCT2::Ui::Windows
 
             DisableWidgets();
 
-            WindowAlignTabs(this, WIDX_TAB_1, WIDX_TAB_7);
+            WindowAlignTabs(this, WIDX_TAB_1, WIDX_TAB_8);
         }
 
         void DisableWidgets()
@@ -542,7 +573,7 @@ namespace OpenRCT2::Ui::Windows
             }
 
             setWidgetDisabled(WIDX_TAB_4, getGameState().park.flags.has(ParkFlag::noMoney));
-            setWidgetDisabled(WIDX_TAB_7, !Config::Get().general.debuggingTools);
+            setWidgetDisabled(WIDX_TAB_8, !Config::Get().general.debuggingTools);
         }
 
         void setPage(int32_t newPage)
@@ -590,6 +621,8 @@ namespace OpenRCT2::Ui::Windows
 
         void OverviewTabDraw(RenderTarget& rt)
         {
+            DrawGuestDecisionText(
+                rt, windowPos + ScreenCoordsXY{ widgets[WIDX_TAB_7].left + 6, widgets[WIDX_TAB_7].top + 8 }, 20, "D3");
             if (widgetIsDisabled(*this, WIDX_TAB_1))
                 return;
 
@@ -1629,13 +1662,15 @@ namespace OpenRCT2::Ui::Windows
             {
                 auto text = _generatedThought;
                 const auto thoughtWidth = widgets[WIDX_PAGE_BACKGROUND].width() - 8;
+                const auto thoughtHeight = windowPos.y + widgets[WIDX_PAGE_BACKGROUND].bottom - 4 - screenCoords.y;
+                const auto maxLines = std::min(
+                    kGuestNarrativeMaxLines, std::max(0, thoughtHeight / FontGetLineHeight(FontStyle::small)));
                 std::string wrapped;
                 int32_t breaks = 0;
                 while (!text.empty())
                 {
                     wrapString(text, thoughtWidth, FontStyle::small, &wrapped, &breaks);
-                    if (breaks < kGuestNarrativeMaxLines
-                        && String::lengthOf(text.c_str()) <= kGuestNarrativeMaxCharacters)
+                    if (breaks < maxLines && String::lengthOf(text.c_str()) <= kGuestNarrativeMaxCharacters)
                         break;
                     if (text.ends_with("..."))
                         text.resize(text.size() - 3);
@@ -1869,13 +1904,67 @@ namespace OpenRCT2::Ui::Windows
         }
 #pragma endregion
 
+        void onDrawDecisions(RenderTarget& rt)
+        {
+            drawWidgets(rt);
+            OverviewTabDraw(rt);
+            StatsTabDraw(rt);
+            RidesTabDraw(rt);
+            FinanceTabDraw(rt);
+            ThoughtsTabDraw(rt);
+            InventoryTabDraw(rt);
+            DebugTabDraw(rt);
+            const auto* guest = GetGuest();
+            if (!guest)
+                return;
+            const auto stats = GetGuestDecisionStats();
+            const auto textWidth = width - 12;
+            DrawGuestDecisionText(
+                rt, windowPos + ScreenCoordsXY{ 6, 48 }, textWidth,
+                FormatStringID(STR_GUEST_DECISION_MODEL_NAME, Config::Get().interface.guestDecisionModel.c_str()));
+            DrawGuestDecisionText(
+                rt, windowPos + ScreenCoordsXY{ 6, 62 }, textWidth,
+                FormatStringID(GuestDecisionStatusLabel(stats.status), stats.applied));
+            const auto* record = GetGuestDecisionRecord(guest->id.ToUnderlying(), guest->peepId);
+            if (!record)
+            {
+                DrawGuestDecisionText(rt, windowPos + ScreenCoordsXY{ 6, 82 }, textWidth, STR_GUEST_DECISION_NO_RECORD);
+                DrawGuestDecisionHint(rt, windowPos + ScreenCoordsXY{ 6, 100 }, textWidth, STR_GUEST_DECISION_IDLE_HINT);
+                return;
+            }
+            DrawGuestDecisionText(rt, windowPos + ScreenCoordsXY{ 6, 78 }, textWidth, GuestDecisionOutcomeLabel(*record));
+            const auto age = static_cast<int32_t>(
+                std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - record->updated).count());
+            DrawGuestDecisionText(
+                rt, windowPos + ScreenCoordsXY{ 6, 92 }, textWidth,
+                FormatStringID(STR_GUEST_DECISION_AGE, age, record->elapsedMilliseconds));
+            DrawGuestDecisionText(rt, windowPos + ScreenCoordsXY{ 6, 108 }, textWidth, STR_GUEST_DECISION_SCORES);
+            for (size_t i = 0; i < record->snapshot.candidates.size(); ++i)
+            {
+                const auto pos = windowPos + ScreenCoordsXY{ 6, 126 + static_cast<int32_t>(i) * 28 };
+                const auto label = std::string(1, static_cast<char>('A' + i)) + ": " + record->snapshot.candidates[i].name;
+                DrawGuestDecisionText(rt, pos, textWidth - 42, label);
+                if (i < record->probabilities.size())
+                {
+                    const auto score = record->probabilities[i];
+                    DrawGuestDecisionText(
+                        rt, pos + ScreenCoordsXY{ textWidth - 37, 0 }, 37,
+                        FormatStringID(STR_GUEST_DECISION_SCORE_PERCENT, static_cast<int32_t>(score * 100 + 0.5f)));
+                    const bool accepted = record->choice == i
+                        && (record->outcome == GuestDecisionOutcome::applied
+                            || record->outcome == GuestDecisionOutcome::unchanged);
+                    DrawGuestDecisionScore(rt, pos + ScreenCoordsXY{ 0, 14 }, textWidth, score, accepted);
+                }
+            }
+        }
+
 #pragma region Debug
         void DebugTabDraw(RenderTarget& rt)
         {
-            if (widgetIsDisabled(*this, WIDX_TAB_7))
+            if (widgetIsDisabled(*this, WIDX_TAB_8))
                 return;
 
-            const auto& widget = widgets[WIDX_TAB_7];
+            const auto& widget = widgets[WIDX_TAB_8];
             auto screenCoords = windowPos + ScreenCoordsXY{ widget.left, widget.top };
 
             int32_t imageId = SPR_TAB_GEARS_0;
@@ -2018,6 +2107,14 @@ namespace OpenRCT2::Ui::Windows
 
         window->init(peep->id);
 
+        return window;
+    }
+
+    WindowBase* GuestDecisionsOpen(Guest* guest)
+    {
+        auto* window = static_cast<GuestWindow*>(GuestOpen(guest));
+        if (window)
+            window->showDecisions();
         return window;
     }
 } // namespace OpenRCT2::Ui::Windows

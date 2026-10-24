@@ -19,6 +19,7 @@
 #include "../entity/EntityList.h"
 #include "../entity/Staff.h"
 #include "../interface/Viewport.h"
+#include "../peep/GuestDecision.h"
 #include "../peep/RideUseSystem.h"
 #include "../profiling/Profiling.h"
 #include "../ride/Vehicle.h"
@@ -147,6 +148,7 @@ namespace OpenRCT2
      */
     void EntityRegistry::resetAllEntities()
     {
+        ResetGuestDecisions();
         // Free all associated Entity pointers prior to zeroing memory
         for (int32_t i = 0; i < kMaxEntities; ++i)
         {

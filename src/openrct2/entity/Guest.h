@@ -13,6 +13,8 @@
 #include "../ride/ShopItem.h"
 #include "Peep.h"
 
+#include <optional>
+
 struct CarEntry;
 
 namespace OpenRCT2
@@ -288,6 +290,8 @@ namespace OpenRCT2
         none = 255,
     };
 
+    struct GuestDecisionSnapshot;
+
     struct Guest : Peep
     {
         static constexpr auto kEntityType = EntityType::guest;
@@ -362,7 +366,10 @@ namespace OpenRCT2
         void updateAnimationGroup();
         bool headingForRideOrParkExit() const;
         void readMap();
-        bool shouldGoOnRide(Ride& ride, StationIndex entranceNum, bool atQueue, bool thinking);
+        bool shouldGoOnRide(Ride& ride, StationIndex entranceNum, bool atQueue, bool thinking, bool dryRun = false);
+        bool canConsiderForDecision(Ride& ride);
+        std::optional<GuestDecisionSnapshot> captureDecision();
+        bool applyDecision(const GuestDecisionSnapshot& snapshot, uint16_t rideId, std::string* rejection = nullptr);
         void spendMoney(money64& peep_expend_type, money64 amount, ExpenditureType type);
         void spendMoney(money64 amount, ExpenditureType type);
         void setHasRidden(const Ride& ride);

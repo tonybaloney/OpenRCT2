@@ -114,22 +114,24 @@ TEST(GuestNarrative, VisibleThoughtsIgnoreAgingAndPending)
 TEST(GuestNarrative, NormalizesWhitespaceAndBoundsWords)
 {
     EXPECT_EQ(CompactGuestNarrative("  \"I  need\nfood\tand a seat.\" "), "I need food and a seat.");
-    EXPECT_EQ(
-        CompactGuestNarrative("one two three four five six seven eight nine ten red blue green gold pink grey"),
-        "one two three four five six seven eight nine ten red blue green gold pink grey");
-    const auto result = CompactGuestNarrative(
-        "one two three four five six seven eight nine ten red blue green gold pink grey black");
+    std::string boundary = "one";
+    for (size_t i = 1; i < kGuestNarrativeMaxWords; ++i)
+        boundary += " one";
+    EXPECT_EQ(CompactGuestNarrative(boundary), boundary);
+    const auto result = CompactGuestNarrative(boundary + " two");
     ASSERT_TRUE(result);
-    EXPECT_EQ(std::count(result->begin(), result->end(), ' '), 15);
+    EXPECT_EQ(static_cast<size_t>(std::count(result->begin(), result->end(), ' ')), kGuestNarrativeMaxWords - 1);
     EXPECT_TRUE(result->ends_with("..."));
-    EXPECT_LE(String::lengthOf(result->c_str()), 96u);
+    EXPECT_LE(String::lengthOf(result->c_str()), kGuestNarrativeMaxCharacters);
 }
 
 TEST(GuestNarrative, CharacterAndUnicodeLimits)
 {
-    EXPECT_EQ(CompactGuestNarrative(std::string(96, 'a')), std::string(96, 'a'));
-    EXPECT_FALSE(CompactGuestNarrative(std::string(97, 'a')));
-    const auto boundary = std::string(95, 'a') + "\xc3\xa9";
+    EXPECT_EQ(
+        CompactGuestNarrative(std::string(kGuestNarrativeMaxCharacters, 'a')),
+        std::string(kGuestNarrativeMaxCharacters, 'a'));
+    EXPECT_FALSE(CompactGuestNarrative(std::string(kGuestNarrativeMaxCharacters + 1, 'a')));
+    const auto boundary = std::string(kGuestNarrativeMaxCharacters - 1, 'a') + "\xc3\xa9";
     EXPECT_EQ(CompactGuestNarrative(boundary), boundary);
     EXPECT_FALSE(CompactGuestNarrative(boundary + "\xc3\xa9"));
     const std::string unicode = "I love caf\xc3\xa9 snacks.";
@@ -153,10 +155,31 @@ TEST(GuestNarrative, RejectsFormattingAndRoleArtifacts)
 
 TEST(GuestNarrative, PromptMatchesDisplayLimits)
 {
-    EXPECT_EQ(kGuestNarrativeMaxWords, 16u);
-    EXPECT_EQ(kGuestNarrativeMaxCharacters, 96u);
-    EXPECT_EQ(kGuestNarrativeMaxLines, 3);
-    EXPECT_NE(GuestNarrativeSystemPrompt().find("16 words and 96 characters"), std::string_view::npos);
+    EXPECT_EQ(kGuestNarrativeMaxWords, 60u);
+    EXPECT_EQ(kGuestNarrativeMaxCharacters, 360u);
+    EXPECT_EQ(kGuestNarrativeMaxLines, 12);
+    EXPECT_NE(GuestNarrativeSystemPrompt().find("60 words and 360 characters"), std::string_view::npos);
+    EXPECT_NE(GuestNarrativeSystemPrompt().find("one short paragraph"), std::string_view::npos);
+}
+
+TEST(GuestNarrative, PreservesGroundedParagraph)
+{
+    auto snapshot = HealthyGuest();
+    snapshot.hunger = 8;
+    const std::string paragraph =
+        "My stomach's growling, and it keeps stealing my attention. I could really go for a snack before thinking about "
+        "anything else. A bit of food would make this walk much more pleasant.";
+    EXPECT_GT(std::count(paragraph.begin(), paragraph.end(), ' '), 15);
+    EXPECT_GT(String::lengthOf(paragraph.c_str()), 96u);
+    EXPECT_EQ(CompactGuestNarrative(paragraph), paragraph);
+    EXPECT_TRUE(IsGuestNarrativeGrounded(snapshot, paragraph));
+}
+
+TEST(GuestNarrative, CharacterTruncationIncludesEllipsis)
+{
+    const auto prefix = std::string(kGuestNarrativeMaxCharacters - 5, 'a');
+    EXPECT_EQ(CompactGuestNarrative(prefix + " word"), prefix + " word");
+    EXPECT_EQ(CompactGuestNarrative(prefix + " word extra"), prefix + "...");
 }
 
 TEST(GuestNarrative, RejectsUnrelatedAndContradictoryNeeds)
@@ -172,6 +195,23 @@ TEST(GuestNarrative, RejectsUnrelatedAndContradictoryNeeds)
     snapshot.hunger = 200;
     snapshot.happiness = 50;
     EXPECT_FALSE(IsGuestNarrativeGrounded(snapshot, "This place is magical!"));
+}
+
+TEST(GuestNarrative, ParagraphNegationOnlyRejectsNeedContradictions)
+{
+    auto snapshot = HealthyGuest();
+    snapshot.hunger = 8;
+    EXPECT_TRUE(IsGuestNarrativeGrounded(snapshot, "I need food. I don't want to miss the fun."));
+    EXPECT_TRUE(IsGuestNarrativeGrounded(snapshot, "I'm hungry, but I'm not sure where to go."));
+    for (const auto text : { "I am not hungry.", "I no longer need food.", "I don't need to eat.",
+                             "I do not feel hungry.", "My stomach isn't hungry.", "We aren't hungry." })
+        EXPECT_FALSE(IsGuestNarrativeGrounded(snapshot, text)) << text;
+    snapshot.happiness = 75;
+    snapshot.energy = 52;
+    EXPECT_FALSE(IsGuestNarrativeGrounded(snapshot, "I'm hungry, but I'm not tired."));
+    snapshot.hunger = 200;
+    EXPECT_TRUE(IsGuestNarrativeGrounded(snapshot, "I need a break, but I don't want to miss anything."));
+    EXPECT_FALSE(IsGuestNarrativeGrounded(snapshot, "I'm not tired, so I can keep going."));
 }
 
 TEST(GuestNarrative, OldNeedsDoNotOverrideCurrentState)

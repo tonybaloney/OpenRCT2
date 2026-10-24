@@ -20,6 +20,7 @@
 #include "entity/EntityTweener.h"
 #include "entity/PatrolArea.h"
 #include "interface/Screenshot.h"
+#include "peep/GuestDecision.h"
 #include "platform/Platform.h"
 #include "profiling/Profiling.h"
 #include "ride/Vehicle.h"
@@ -48,6 +49,7 @@ namespace OpenRCT2
 
     void swapGameState(std::unique_ptr<GameState_t>& otherState)
     {
+        ResetGuestDecisions();
         _gameState.swap(otherState);
     }
 
@@ -317,6 +319,7 @@ namespace OpenRCT2
 
         MapUpdatePathWideFlags();
         PeepUpdateAll();
+        UpdateGuestDecisions();
         auto restoreProvisionalIntent = Intent(INTENT_ACTION_RESTORE_PROVISIONAL_ELEMENTS);
         ContextBroadcastIntent(&restoreProvisionalIntent);
         VehicleUpdateAll();

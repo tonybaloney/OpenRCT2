@@ -40,8 +40,7 @@ namespace OpenRCT2::Ui
         virtual void ShowMessageBox(SDL_Window* window, const std::string& message) = 0;
         virtual bool HasMenuSupport() = 0;
         virtual int32_t ShowMenuDialog(
-            const std::vector<std::string>& options, const std::string& title, const std::string& text)
-            = 0;
+            const std::vector<std::string>& options, const std::string& title, const std::string& text) = 0;
         virtual void OpenFolder(const std::string& path) = 0;
 
         virtual void OpenURL(const std::string& url) = 0;
@@ -57,5 +56,8 @@ namespace OpenRCT2::Ui
     [[nodiscard]] InGameConsole& GetInGameConsole();
     [[nodiscard]] InputManager& GetInputManager();
     [[nodiscard]] ShortcutManager& GetShortcutManager();
-    [[nodiscard]] GuestThoughtService* GetGuestThoughtService();
+    [[nodiscard]] GuestThoughtService* GetGuestThoughtService(bool enabledOnly = true);
+    std::string GetGuestThoughtModelPath();
+    void ApplyGuestThoughtSettings();
+    void ApplyGuestDecisionSettings();
 } // namespace OpenRCT2::Ui

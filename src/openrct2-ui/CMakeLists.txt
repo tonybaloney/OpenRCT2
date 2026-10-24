@@ -65,13 +65,30 @@ if (ENABLE_GUEST_THOUGHTS)
     endif ()
     target_compile_definitions(openrct2 PRIVATE ENABLE_GUEST_THOUGHTS)
     target_include_directories(openrct2 SYSTEM PRIVATE "${ROOT_DIR}/lib/guest-thoughts/include")
+    file(GLOB GUEST_THOUGHT_MODEL_FILES CONFIGURE_DEPENDS "${ROOT_DIR}/bin/models/*.gguf")
+    add_custom_command(TARGET openrct2 POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:openrct2>/models/guest-decisions"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${ROOT_DIR}/guest-decision-models.json"
+            "$<TARGET_FILE_DIR:openrct2>/models/guest-decisions/")
+    foreach (DECISION_MODEL d3-edge d3-lite)
+        set(DECISION_SOURCE "${ROOT_DIR}/bin/models/guest-decisions/${DECISION_MODEL}")
+        if (EXISTS "${DECISION_SOURCE}/prepared.json")
+            add_custom_command(TARGET openrct2 POST_BUILD
+                COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:openrct2>/models/guest-decisions/${DECISION_MODEL}"
+                COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                    "${DECISION_SOURCE}/${DECISION_MODEL}.gguf" "${DECISION_SOURCE}/readout.f32"
+                    "${DECISION_SOURCE}/decision_config.json" "${DECISION_SOURCE}/prepared.json"
+                    "${DECISION_SOURCE}/LICENSE" "${DECISION_SOURCE}/NOTICE"
+                    "$<TARGET_FILE_DIR:openrct2>/models/guest-decisions/${DECISION_MODEL}/")
+        endif ()
+    endforeach ()
     add_custom_command(TARGET openrct2 POST_BUILD
         COMMAND "${CMAKE_COMMAND}" -E copy_directory "${ROOT_DIR}/bin/guest-thoughts" "$<TARGET_FILE_DIR:openrct2>/guest-thoughts"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:openrct2>/models"
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${ROOT_DIR}/bin/models/qwen2.5-1.5b-instruct-q8_0.gguf" "$<TARGET_FILE_DIR:openrct2>/models/"
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${ROOT_DIR}/bin/models/Qwen-LICENSE" "$<TARGET_FILE_DIR:openrct2>/models/")
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${GUEST_THOUGHT_MODEL_FILES}
+            "${ROOT_DIR}/bin/models/guest-thought-models.json"
+            "${ROOT_DIR}/bin/models/Qwen-LICENSE"
+            "${ROOT_DIR}/bin/models/Qwen2.5-3B-LICENSE" "$<TARGET_FILE_DIR:openrct2>/models/")
 endif ()
 
 SET_CHECK_CXX_FLAGS(openrct2)

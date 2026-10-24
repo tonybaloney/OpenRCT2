@@ -1,13 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Target Name="DeployGuestDecisionCatalog" BeforeTargets="ClCompile" Condition="'$(EnableGuestThoughts)'=='true'">
+    <MakeDir Directories="$(GuestThoughtRoot)bin\models\guest-decisions" />
+    <Copy SourceFiles="$(GuestThoughtRoot)guest-decision-models.json" DestinationFolder="$(GuestThoughtRoot)bin\models\guest-decisions" SkipUnchangedFiles="true" />
+  </Target>
   <Target Name="CheckGuestThoughtFiles" Condition="'$(EnableGuestThoughts)'=='true'">
     <ItemGroup>
-      <GuestThoughtRequired Include="$(GuestThoughtRoot)lib\guest-thoughts\include\llama.h;$(GuestThoughtRoot)lib\guest-thoughts\include\ggml.h;$(GuestThoughtRoot)lib\guest-thoughts\include\ggml-backend.h;$(GuestThoughtRoot)bin\models\qwen2.5-1.5b-instruct-q8_0.gguf;$(GuestThoughtRoot)bin\guest-thoughts\llama.dll;$(GuestThoughtRoot)bin\guest-thoughts\ggml.dll;$(GuestThoughtRoot)bin\guest-thoughts\ggml-base.dll;$(GuestThoughtRoot)bin\guest-thoughts\ggml-cpu.dll;$(GuestThoughtRoot)bin\guest-thoughts\ggml-cuda.dll;$(GuestThoughtRoot)bin\guest-thoughts\libomp.dll;$(GuestThoughtRoot)bin\guest-thoughts\cublas64_13.dll;$(GuestThoughtRoot)bin\guest-thoughts\cublasLt64_13.dll" />
+      <GuestThoughtRequired Include="$(GuestThoughtRoot)lib\guest-thoughts\include\llama.h;$(GuestThoughtRoot)lib\guest-thoughts\include\ggml.h;$(GuestThoughtRoot)lib\guest-thoughts\include\ggml-backend.h;$(GuestThoughtRoot)bin\models\qwen2.5-1.5b-instruct-q8_0.gguf;$(GuestThoughtRoot)bin\models\guest-thought-models.json;$(GuestThoughtRoot)bin\models\Qwen-LICENSE;$(GuestThoughtRoot)bin\models\Qwen2.5-3B-LICENSE;$(GuestThoughtRoot)bin\guest-thoughts\llama.dll;$(GuestThoughtRoot)bin\guest-thoughts\ggml.dll;$(GuestThoughtRoot)bin\guest-thoughts\ggml-base.dll;$(GuestThoughtRoot)bin\guest-thoughts\ggml-cpu.dll;$(GuestThoughtRoot)bin\guest-thoughts\ggml-cuda.dll;$(GuestThoughtRoot)bin\guest-thoughts\libomp.dll;$(GuestThoughtRoot)bin\guest-thoughts\cublas64_13.dll;$(GuestThoughtRoot)bin\guest-thoughts\cublasLt64_13.dll" />
     </ItemGroup>
     <Delete Files="$(GuestThoughtRoot)lib\guest-thoughts\prepared.stamp" Condition="!Exists('%(GuestThoughtRequired.Identity)')" />
   </Target>
   <Target Name="PrepareGuestThoughts" BeforeTargets="ClCompile" DependsOnTargets="CheckGuestThoughtFiles" Condition="'$(EnableGuestThoughts)'=='true'"
-          Inputs="$(GuestThoughtRoot)guest-thoughts.json;$(GuestThoughtRoot)scripts\prepare-guest-thoughts.ps1;$(GuestThoughtRoot)bin\models\qwen2.5-1.5b-instruct-q8_0.gguf"
+          Inputs="$(GuestThoughtRoot)guest-thoughts.json;$(GuestThoughtRoot)guest-thought-models.json;$(GuestThoughtRoot)scripts\prepare-guest-thoughts.ps1;$(GuestThoughtRoot)scripts\verified-model-download.ps1;$(GuestThoughtRoot)bin\models\qwen2.5-1.5b-instruct-q8_0.gguf"
           Outputs="$(GuestThoughtRoot)lib\guest-thoughts\prepared.stamp">
     <Error Condition="'$(Platform)'!='arm64'" Text="The pinned guest-thought runtime requires Windows ARM64. Use /p:EnableGuestThoughts=false on other platforms." />
     <Exec Command="powershell.exe -NoProfile -File &quot;$(GuestThoughtRoot)scripts\prepare-guest-thoughts.ps1&quot; -Root &quot;$(GuestThoughtRoot).&quot; -RuntimeDirectory &quot;$(GuestThoughtRuntime)&quot;" />

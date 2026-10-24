@@ -391,6 +391,8 @@ namespace OpenRCT2::Config
             model->guestThoughts = reader->GetBoolean("guest_thoughts", true);
             model->guestThoughtModel = reader->GetString("guest_thought_model", "");
             model->guestThoughtForceCpu = reader->GetBoolean("guest_thought_force_cpu", false);
+            model->guestDecisions = reader->GetBoolean("guest_decisions", false);
+            model->guestDecisionModel = reader->GetString("guest_decision_model", "d3-lite");
             model->toolbarButtonsCentred = reader->GetBoolean("toolbar_buttons_centred", kToolbarButtonsCentredDefault);
             model->toolbarShowFinances = reader->GetBoolean("toolbar_show_finances", true);
             model->toolbarShowResearch = reader->GetBoolean("toolbar_show_research", true);
@@ -421,6 +423,8 @@ namespace OpenRCT2::Config
         writer->WriteBoolean("guest_thoughts", model->guestThoughts);
         writer->WriteString("guest_thought_model", model->guestThoughtModel);
         writer->WriteBoolean("guest_thought_force_cpu", model->guestThoughtForceCpu);
+        writer->WriteBoolean("guest_decisions", model->guestDecisions);
+        writer->WriteString("guest_decision_model", model->guestDecisionModel);
         writer->WriteBoolean("toolbar_buttons_centred", model->toolbarButtonsCentred);
         writer->WriteBoolean("toolbar_show_finances", model->toolbarShowFinances);
         writer->WriteBoolean("toolbar_show_research", model->toolbarShowResearch);

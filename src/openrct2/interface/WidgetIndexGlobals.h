@@ -35,8 +35,8 @@ namespace OpenRCT2
     constexpr int32_t WC_SCENERY__WIDX_SCENERY_EYEDROPPER_BUTTON = 10;
 
     constexpr int32_t WC_PEEP__WIDX_PATROL = 10;
-    constexpr int32_t WC_PEEP__WIDX_ACTION_LBL = 13;
-    constexpr int32_t WC_PEEP__WIDX_PICKUP = 14;
+    constexpr int32_t WC_PEEP__WIDX_ACTION_LBL = 14;
+    constexpr int32_t WC_PEEP__WIDX_PICKUP = 15;
 
     constexpr int32_t WC_TRACK_DESIGN_LIST__WIDX_ROTATE = 8;
     constexpr int32_t WC_TRACK_DESIGN_PLACE__WIDX_ROTATE = 3;
