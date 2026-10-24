@@ -52,5 +52,5 @@ namespace OpenRCT2::Ui
     std::unique_ptr<IGuestThoughtBackend> CreateLlamaGuestThoughtBackend(
         std::string runtimeDirectory, std::string modelPath, GuestThoughtBackendOptions options = {});
     std::unique_ptr<IGuestDecisionBackend> CreateLlamaGuestDecisionBackend(
-        std::string runtimeDirectory, std::string modelDirectory);
+        std::string runtimeDirectory, std::string modelDirectory, bool omitIncumbentHints = false);
 } // namespace OpenRCT2::Ui

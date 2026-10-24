@@ -142,6 +142,45 @@ TEST(GuestDecision, FreshnessTracksIdentityIntentCashAndMeaningfulNeeds)
     EXPECT_NE(snapshot.freshnessKey(), key);
 }
 
+TEST(GuestDecision, IncumbentNeutralPromptRemovesHintsWithoutChangingChoicesOrFreshness)
+{
+    auto snapshot = Snapshot();
+    snapshot.heading = 1;
+    snapshot.candidates[0].description = R"({"goal":"ride","distance":12,"already_heading_here":true})";
+    snapshot.candidates[1].description = R"({"goal":"food","distance":34,"already_heading_here":false})";
+    const auto key = snapshot.freshnessKey();
+    const auto original = snapshot.prompt();
+    const auto neutral = snapshot.prompt(true);
+    EXPECT_NE(original.find("current_destination"), std::string::npos);
+    EXPECT_NE(original.find("already_heading_here"), std::string::npos);
+    EXPECT_EQ(neutral.find("current_destination"), std::string::npos);
+    EXPECT_EQ(neutral.find("already_heading_here"), std::string::npos);
+    EXPECT_NE(neutral.find("A: ride_1:"), std::string::npos);
+    EXPECT_NE(neutral.find("B: ride_2:"), std::string::npos);
+    EXPECT_NE(neutral.find("\"distance\":12"), std::string::npos);
+    EXPECT_EQ(snapshot.freshnessKey(), key);
+    auto expectedState = json_t::parse(snapshot.stateJson());
+    expectedState.erase("current_destination");
+    EXPECT_EQ(json_t::parse(snapshot.stateJson(true)), expectedState);
+    snapshot.heading = 2;
+    snapshot.candidates[0].description = R"({"goal":"ride","distance":12,"already_heading_here":false})";
+    snapshot.candidates[1].description = R"({"goal":"food","distance":34,"already_heading_here":true})";
+    EXPECT_EQ(snapshot.prompt(true), neutral);
+    EXPECT_NE(snapshot.prompt(), original);
+    EXPECT_NE(snapshot.freshnessKey(), key);
+
+    GuestDecisionRecord record;
+    record.snapshot = snapshot;
+    record.probabilities = { 0.4f, 0.6f };
+    const auto trace = json_t::parse(SerializeGuestDecisionTrace(record, true));
+    EXPECT_EQ(trace["prompt"], neutral);
+    EXPECT_EQ(trace["prompt_variant"], "incumbent-neutral");
+    EXPECT_EQ(trace["incumbent_id"], 2);
+    EXPECT_EQ(trace["winner_is_incumbent"], true);
+    EXPECT_EQ(trace["minimum_probability"], 0.45);
+    EXPECT_EQ(trace["minimum_margin"], 0.08);
+}
+
 TEST(GuestDecision, RejectsMalformedProbabilitiesAndDeclinesAmbiguousChoices)
 {
     EXPECT_EQ(SelectGuestDecision({ 0.1f, 0.9f }, 2), 1u);

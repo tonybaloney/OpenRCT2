@@ -294,6 +294,25 @@ tests.exe --gtest_filter=GuestDecisionModel.*:GuestDecisionIntegration.DISABLED_
 
 #### Tracing and comparing a saved park
 
+The `ab/d3-incumbent-neutral` experiment branch adds an explicit
+`-PromptVariant incumbent-neutral` comparison. It removes `current_destination`
+from model-visible state and `already_heading_here` from each option, without
+changing candidate eligibility, option order, confidence thresholds (0.45 top
+probability and 0.08 margin), stale-result checks or native fallback. Incumbent
+identity remains in diagnostics and main-thread freshness validation. Ordinary
+gameplay and comparisons without this parameter retain the original prompt.
+This tests an incumbent-confidence shortcut; it is not a claim that lowering
+confidence or increasing redirections improves the park.
+
+```powershell
+.\scripts\run-d3-eval-suite.ps1 -Seconds 300
+```
+
+The suite runs D3-Lite and D3-Edge with original and incumbent-neutral prompts,
+each paired with a freshly reloaded native baseline. Allow at least 40 minutes
+for the four five-minute native/model pairs, plus loading and frozen-input
+ablation checks. All four runs must match the same initial state and RNG.
+
 After building the test executable and installing the chosen decision model, run:
 
 ```powershell

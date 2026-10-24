@@ -138,6 +138,11 @@ TEST(GuestDecisionExperiment, DISABLED_ComparePark)
     const auto output = std::filesystem::u8path(Platform::GetEnvironmentVariable("OPENRCT2_DECISION_EXPERIMENT_OUTPUT"));
     const auto secondsText = Platform::GetEnvironmentVariable("OPENRCT2_DECISION_EXPERIMENT_SECONDS");
     const auto model = Platform::GetEnvironmentVariable("OPENRCT2_DECISION_EXPERIMENT_MODEL");
+    auto promptVariant = Platform::GetEnvironmentVariable("OPENRCT2_DECISION_EXPERIMENT_PROMPT");
+    if (promptVariant.empty())
+        promptVariant = "original";
+    ASSERT_TRUE(promptVariant == "original" || promptVariant == "incumbent-neutral");
+    const bool omitIncumbentHints = promptVariant == "incumbent-neutral";
     uint32_t seconds{};
     const auto parsed = std::from_chars(secondsText.data(), secondsText.data() + secondsText.size(), seconds);
     ASSERT_EQ(parsed.ec, std::errc{});
@@ -147,9 +152,10 @@ TEST(GuestDecisionExperiment, DISABLED_ComparePark)
     ASSERT_TRUE(model == "d3-lite" || model == "d3-edge");
     ASSERT_TRUE(std::filesystem::is_directory(output));
     const auto directory = Path::GetDirectory(Platform::GetCurrentExecutablePath());
-    auto createBackend = [directory, model] {
+    auto createBackend = [directory, model, omitIncumbentHints] {
         return Ui::CreateLlamaGuestDecisionBackend(
-            Path::Combine(directory, "guest-thoughts"), Path::Combine(directory, "models", "guest-decisions", model));
+            Path::Combine(directory, "guest-thoughts"), Path::Combine(directory, "models", "guest-decisions", model),
+            omitIncumbentHints);
     };
     struct Cleanup
     {
@@ -170,7 +176,10 @@ TEST(GuestDecisionExperiment, DISABLED_ComparePark)
     gCustomUserDataPath = Path::Combine(Platform::GetEnvironmentVariable("OPENRCT2_DECISION_EXPERIMENT_OUTPUT"), "profile");
     Config::Get().general.language = LANGUAGE_ENGLISH_UK;
     std::vector<GuestDecisionRecord> ablationSamples;
-    json_t report = { { "model", model }, { "seconds_per_variant", seconds }, { "ticks_per_second", kGameUpdateFPS } };
+    json_t report = {
+        { "model", model }, { "prompt_variant", promptVariant }, { "seconds_per_variant", seconds },
+        { "ticks_per_second", kGameUpdateFPS }, { "minimum_probability", 0.45 }, { "minimum_margin", 0.08 }
+    };
     json_t initial;
     for (const bool enabled : { false, true })
     {
@@ -203,7 +212,7 @@ TEST(GuestDecisionExperiment, DISABLED_ComparePark)
         if (enabled)
             ConfigureGuestDecisions(createBackend);
         SetGuestDecisionTraceSink([&](const GuestDecisionRecord& record) {
-            trace << SerializeGuestDecisionTrace(record) << '\n';
+            trace << SerializeGuestDecisionTrace(record, omitIncumbentHints) << '\n';
             if (record.outcome != GuestDecisionOutcome::pending)
             {
                 ++completed;

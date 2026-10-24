@@ -24,7 +24,7 @@
 
 namespace OpenRCT2
 {
-    std::string GuestDecisionSnapshot::stateJson() const
+    std::string GuestDecisionSnapshot::stateJson(bool omitIncumbentHints) const
     {
         auto state = json_t::parse(guest.prompt());
         state.erase("earlier_native_thoughts");
@@ -32,10 +32,13 @@ namespace OpenRCT2
         state["preferred_intensity_min"] = minimumIntensity;
         state["preferred_intensity_max"] = maximumIntensity;
         state["nausea_tolerance_0_to_3"] = nauseaTolerance;
-        state["current_destination"] = nullptr;
-        for (const auto& candidate : candidates)
-            if (candidate.rideId == heading && heading != 65535)
-                state["current_destination"] = candidate.description;
+        if (!omitIncumbentHints)
+        {
+            state["current_destination"] = nullptr;
+            for (const auto& candidate : candidates)
+                if (candidate.rideId == heading && heading != 65535)
+                    state["current_destination"] = candidate.description;
+        }
         auto stateText = state.dump();
         for (auto& c : stateText)
             if (c == '<' || c == '>')
@@ -43,16 +46,22 @@ namespace OpenRCT2
         return stateText;
     }
 
-    std::string GuestDecisionSnapshot::prompt() const
+    std::string GuestDecisionSnapshot::prompt(bool omitIncumbentHints) const
     {
         if (candidates.size() < 2 || candidates.size() > kGuestDecisionMaxCandidates)
             throw std::runtime_error("Guest decisions require between 2 and 8 options.");
-        std::string user = "State:\n" + stateJson()
+        std::string user = "State:\n" + stateJson(omitIncumbentHints)
             + "\n\nQuestion:\nChoose the next destination for this theme park guest. "
               "Prioritise current physiological needs, then appealing rides, short queues and walking distance.\n\nOptions:\n";
         for (size_t i = 0; i < candidates.size(); ++i)
         {
             auto description = candidates[i].description;
+            if (omitIncumbentHints)
+            {
+                auto attributes = json_t::parse(description);
+                attributes.erase("already_heading_here");
+                description = attributes.dump();
+            }
             // Names and descriptions are data, never chat-template delimiters.
             for (auto& c : description)
                 if (static_cast<unsigned char>(c) < 32 || c == '<' || c == '>')
@@ -262,7 +271,7 @@ namespace OpenRCT2
         _traceSink = std::move(sink);
     }
 
-    std::string SerializeGuestDecisionTrace(const GuestDecisionRecord& record)
+    std::string SerializeGuestDecisionTrace(const GuestDecisionRecord& record, bool omitIncumbentHints)
     {
         const auto& snapshot = record.snapshot;
         if (!record.probabilities.empty())
@@ -270,12 +279,13 @@ namespace OpenRCT2
         constexpr std::array outcomes = { "pending", "applied", "unchanged", "low_confidence", "stale" };
         json_t value = {
             { "schema", 1 },
+            { "prompt_variant", omitIncumbentHints ? "incumbent-neutral" : "original" },
             { "entity_id", record.entityId },
             { "guest_id", record.guestId },
             { "tick", snapshot.tick },
             { "outcome", outcomes[static_cast<size_t>(record.outcome)] },
-            { "state", json_t::parse(snapshot.stateJson()) },
-            { "prompt", snapshot.prompt() },
+            { "state", json_t::parse(snapshot.stateJson(omitIncumbentHints)) },
+            { "prompt", snapshot.prompt(omitIncumbentHints) },
             { "incumbent_id", snapshot.heading },
             { "elapsed_ms", record.elapsedMilliseconds },
             { "heading_at_apply", record.headingAtApply ? json_t(*record.headingAtApply) : json_t(nullptr) },

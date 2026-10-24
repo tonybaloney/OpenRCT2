@@ -125,6 +125,12 @@ other model workloads (including the live game's inference), and run:
 .\scripts\compare-guest-decisions.ps1 -Seconds 300 -Model d3-lite
 ```
 
+On `ab/d3-incumbent-neutral`, append `-PromptVariant incumbent-neutral` to
+remove incumbent-target hints from the model prompt only. Confidence and safety
+gates remain unchanged, and normal gameplay retains the original prompt.
+`.\scripts\run-d3-eval-suite.ps1 -Seconds 300` runs both D3 models with both
+prompts and a fresh native baseline for each (at least 40 minutes total).
+
 Add `-Park "C:\parks\demo.park"` to use a different saved park. The script reloads
 the same starting state for each variant and writes reports/traces beneath a
 new `bin\guest-decision-comparison-*` directory. Inspect `comparison.json`,

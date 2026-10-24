@@ -2,6 +2,7 @@ param(
     [string]$Park = (Join-Path $PSScriptRoot '..\test\tests\testdata\parks\bpb.sv6'),
     [ValidateRange(2, 3600)][int]$Seconds = 300,
     [ValidateSet('d3-lite', 'd3-edge')][string]$Model = 'd3-lite',
+    [ValidateSet('original', 'incumbent-neutral')][string]$PromptVariant = 'original',
     [string]$OutputDirectory
 )
 $ErrorActionPreference = 'Stop'
@@ -18,6 +19,7 @@ $metadata = @{
     park = $parkPath
     park_sha256 = (Get-FileHash -LiteralPath $parkPath -Algorithm SHA256).Hash
     model = $Model
+    prompt_variant = $PromptVariant
     seconds_per_variant = $Seconds
     started_utc = [DateTime]::UtcNow.ToString('o')
     narration = 'off (headless experiment)'
@@ -25,7 +27,8 @@ $metadata = @{
 }
 $metadata | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $output 'metadata.json') -Encoding UTF8
 $names = @('OPENRCT2_DECISION_EXPERIMENT_PARK', 'OPENRCT2_DECISION_EXPERIMENT_OUTPUT',
-           'OPENRCT2_DECISION_EXPERIMENT_SECONDS', 'OPENRCT2_DECISION_EXPERIMENT_MODEL')
+           'OPENRCT2_DECISION_EXPERIMENT_SECONDS', 'OPENRCT2_DECISION_EXPERIMENT_MODEL',
+           'OPENRCT2_DECISION_EXPERIMENT_PROMPT')
 $previous = @{}
 foreach ($name in $names) { $previous[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
 try {
@@ -33,6 +36,7 @@ try {
     $env:OPENRCT2_DECISION_EXPERIMENT_OUTPUT = $output
     $env:OPENRCT2_DECISION_EXPERIMENT_SECONDS = [string]$Seconds
     $env:OPENRCT2_DECISION_EXPERIMENT_MODEL = $Model
+    $env:OPENRCT2_DECISION_EXPERIMENT_PROMPT = $PromptVariant
     $arguments = @('--gtest_filter=GuestDecisionExperiment.DISABLED_ComparePark',
                    '--gtest_also_run_disabled_tests',
                    ('--gtest_output=xml:"' + (Join-Path $output 'test-results.xml') + '"'))

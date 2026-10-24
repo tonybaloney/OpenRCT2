@@ -37,8 +37,8 @@ namespace OpenRCT2
         uint8_t minimumIntensity{}, maximumIntensity{}, nauseaTolerance{};
         std::vector<GuestDecisionCandidate> candidates;
 
-        std::string prompt() const;
-        std::string stateJson() const;
+        std::string prompt(bool omitIncumbentHints = false) const;
+        std::string stateJson(bool omitIncumbentHints = false) const;
         std::string freshnessKey() const;
     };
 
@@ -128,7 +128,7 @@ namespace OpenRCT2
 
     using GuestDecisionTraceSink = std::function<void(const GuestDecisionRecord&)>;
     void SetGuestDecisionTraceSink(GuestDecisionTraceSink sink);
-    std::string SerializeGuestDecisionTrace(const GuestDecisionRecord& record);
+    std::string SerializeGuestDecisionTrace(const GuestDecisionRecord& record, bool omitIncumbentHints = false);
     constexpr size_t kGuestDecisionHistoryCapacity = 128;
     const std::deque<GuestDecisionRecord>& GetGuestDecisionHistory();
     const GuestDecisionRecord* GetGuestDecisionRecord(uint16_t entityId, uint32_t guestId);

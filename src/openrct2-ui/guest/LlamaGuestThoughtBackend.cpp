@@ -453,6 +453,7 @@ namespace OpenRCT2::Ui
     {
         LlamaApi _api;
         std::string _directory;
+        bool _omitIncumbentHints{};
         llama_model* _model{};
         llama_context* _context{};
         std::vector<float> _readout;
@@ -535,9 +536,10 @@ namespace OpenRCT2::Ui
         }
 
     public:
-        LlamaGuestDecisionBackend(std::string runtime, std::string directory)
+        LlamaGuestDecisionBackend(std::string runtime, std::string directory, bool omitIncumbentHints)
             : _api(runtime)
             , _directory(std::move(directory))
+            , _omitIncumbentHints(omitIncumbentHints)
         {
         }
 
@@ -563,7 +565,7 @@ namespace OpenRCT2::Ui
                     return {};
                 if (!_context)
                     initialise();
-                const auto prompt = snapshot.prompt();
+                const auto prompt = snapshot.prompt(_omitIncumbentHints);
                 const auto* vocab = _api.llama_model_get_vocab(_model);
                 const auto count = -_api.llama_tokenize(
                     vocab, prompt.data(), static_cast<int32_t>(prompt.size()), nullptr, 0, false, true);
@@ -629,15 +631,16 @@ namespace OpenRCT2::Ui
         }
     };
 
-    std::unique_ptr<IGuestDecisionBackend> CreateLlamaGuestDecisionBackend(std::string runtime, std::string directory)
+    std::unique_ptr<IGuestDecisionBackend> CreateLlamaGuestDecisionBackend(
+        std::string runtime, std::string directory, bool omitIncumbentHints)
     {
-        return std::make_unique<LlamaGuestDecisionBackend>(std::move(runtime), std::move(directory));
+        return std::make_unique<LlamaGuestDecisionBackend>(std::move(runtime), std::move(directory), omitIncumbentHints);
     }
 } // namespace OpenRCT2::Ui
 #else
 namespace OpenRCT2::Ui
 {
-    std::unique_ptr<IGuestDecisionBackend> CreateLlamaGuestDecisionBackend(std::string, std::string)
+    std::unique_ptr<IGuestDecisionBackend> CreateLlamaGuestDecisionBackend(std::string, std::string, bool)
     {
         throw std::runtime_error("Embedded guest decisions are not enabled in this build.");
     }
