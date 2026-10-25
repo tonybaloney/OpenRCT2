@@ -55,11 +55,14 @@ ApplyPaletteShader::ApplyPaletteShader()
     glCall(glUniform1i, uTexture, 0);
     glCall(glUniform1i, uLightTexture, 1);
     glCall(glUniform1i, uLightPalette, 2);
+    glCall(glUniform1i, uWeatherTexture, 3);
+    glCall(glUniform4f, uWeather, 0, 0, 0, 0);
     DisableLighting();
 
     glCall(glGenTextures, 1, &_lightTexture);
     glCall(glGenTextures, 1, &_lightPaletteTexture);
-    for (auto texture : { _lightTexture, _lightPaletteTexture })
+    glCall(glGenTextures, 1, &_weatherTexture);
+    for (auto texture : { _lightTexture, _lightPaletteTexture, _weatherTexture })
     {
         OpenGLAPI::SetTexture(1, GL_TEXTURE_2D, texture);
         glCall(glTexParameteri, GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -77,6 +80,7 @@ ApplyPaletteShader::~ApplyPaletteShader()
     glCall(glDeleteVertexArrays, 1, &_vao);
     glCall(glDeleteTextures, 1, &_lightTexture);
     glCall(glDeleteTextures, 1, &_lightPaletteTexture);
+    glCall(glDeleteTextures, 1, &_weatherTexture);
 }
 
 void ApplyPaletteShader::GetLocations()
@@ -86,6 +90,8 @@ void ApplyPaletteShader::GetLocations()
     uLightTexture = GetUniformLocation("uLightTexture");
     uLightPalette = GetUniformLocation("uLightPalette");
     uLightingEnabled = GetUniformLocation("uLightingEnabled");
+    uWeatherTexture = GetUniformLocation("uWeatherTexture");
+    uWeather = GetUniformLocation("uWeather");
 
     vPosition = GetAttributeLocation("vPosition");
     vTextureCoordinate = GetAttributeLocation("vTextureCoordinate");
@@ -125,6 +131,30 @@ void ApplyPaletteShader::SetLighting(
 void ApplyPaletteShader::DisableLighting()
 {
     glCall(glUniform1i, uLightingEnabled, GL_FALSE);
+}
+
+void ApplyPaletteShader::SetWeather(
+    std::span<const uint8_t> mask, uint32_t width, uint32_t height, float mist, float rain, float time, bool snow)
+{
+    if (mask.empty())
+    {
+        glCall(glUniform4f, uWeather, 0, 0, 0, 0);
+        return;
+    }
+
+    OpenGLAPI::SetTexture(3, GL_TEXTURE_2D, _weatherTexture);
+    glCall(glPixelStorei, GL_UNPACK_ALIGNMENT, 1);
+    if (_weatherWidth != width || _weatherHeight != height)
+    {
+        glCall(glTexImage2D, GL_TEXTURE_2D, 0, GL_R8UI, width, height, 0, GL_RED_INTEGER, GL_UNSIGNED_BYTE, mask.data());
+        _weatherWidth = width;
+        _weatherHeight = height;
+    }
+    else
+    {
+        glCall(glTexSubImage2D, GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RED_INTEGER, GL_UNSIGNED_BYTE, mask.data());
+    }
+    glCall(glUniform4f, uWeather, mist, rain, time, snow ? 1.0f : 0.0f);
 }
 
 void ApplyPaletteShader::Draw()

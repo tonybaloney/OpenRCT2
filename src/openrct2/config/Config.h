@@ -59,6 +59,7 @@ namespace OpenRCT2::Config
         bool upperCaseBanners;
         bool renderWeatherEffects;
         bool renderWeatherGloom;
+        bool weatherAtmosphere;
         bool disableLightningEffect;
         bool showGuestPurchases;
         bool transparentScreenshot;

@@ -262,6 +262,7 @@ namespace OpenRCT2::Config
             model->zoomToCursor = reader->GetBoolean("zoom_to_cursor", true);
             model->renderWeatherEffects = reader->GetBoolean("render_weather_effects", true);
             model->renderWeatherGloom = reader->GetBoolean("render_weather_gloom", true);
+            model->weatherAtmosphere = reader->GetBoolean("weather_atmosphere", false);
             model->showGuestPurchases = reader->GetBoolean("show_guest_purchases", false);
             model->showRealNamesOfGuests = reader->GetBoolean("show_real_names_of_guests", true);
             model->showRealNamesOfStaff = reader->GetBoolean("show_real_names_of_staff", false);
@@ -359,6 +360,7 @@ namespace OpenRCT2::Config
         writer->WriteBoolean("zoom_to_cursor", model->zoomToCursor);
         writer->WriteBoolean("render_weather_effects", model->renderWeatherEffects);
         writer->WriteBoolean("render_weather_gloom", model->renderWeatherGloom);
+        writer->WriteBoolean("weather_atmosphere", model->weatherAtmosphere);
         writer->WriteBoolean("show_guest_purchases", model->showGuestPurchases);
         writer->WriteBoolean("show_real_names_of_guests", model->showRealNamesOfGuests);
         writer->WriteBoolean("show_real_names_of_staff", model->showRealNamesOfStaff);

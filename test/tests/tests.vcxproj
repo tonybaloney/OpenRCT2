@@ -115,6 +115,7 @@
     <ClCompile Include="TileElements.cpp" />
     <ClCompile Include="TileElementsView.cpp" />
     <ClCompile Include="WidgetStateTests.cpp" />
+    <ClCompile Include="WeatherAtmosphereTests.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="testdata\sprites\badManifest.json" />

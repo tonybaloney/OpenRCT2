@@ -143,6 +143,7 @@ namespace OpenRCT2::Ui::Windows
         WIDX_ENABLE_LIGHT_FX_CHECKBOX,
         WIDX_ENABLE_LIGHT_FX_FOR_VEHICLES_CHECKBOX,
         WIDX_RENDER_WEATHER_EFFECTS_CHECKBOX,
+        WIDX_WEATHER_ATMOSPHERE_CHECKBOX,
         WIDX_DISABLE_LIGHTNING_EFFECT_CHECKBOX,
 
         // Culture / Units
@@ -321,12 +322,13 @@ namespace OpenRCT2::Ui::Windows
         makeWidget({155, kFrameRenderingStart + 90}, {145,  14}, WidgetType::dropdownMenu, WindowColour::secondary, kStringIdNone,              STR_VIRTUAL_FLOOR_STYLE_TIP   ), // Virtual floor dropdown
         makeWidget({288, kFrameRenderingStart + 91}, { 11,  12}, WidgetType::button,       WindowColour::secondary, STR_DROPDOWN_GLYPH,         STR_VIRTUAL_FLOOR_STYLE_TIP   ), // Virtual floor dropdown
 
-        makeWidget({ 5,  kFrameEffectStart + 0}, {300, 94}, WidgetType::groupbox, WindowColour::secondary, STR_EFFECTS_GROUP                                             ), // Rendering group
+        makeWidget({ 5,  kFrameEffectStart + 0}, {300, 109}, WidgetType::groupbox, WindowColour::secondary, STR_EFFECTS_GROUP                                             ), // Rendering group
         makeWidget({10, kFrameEffectStart + 15}, {281, 12}, WidgetType::checkbox, WindowColour::secondary, STR_CYCLE_DAY_NIGHT,          STR_CYCLE_DAY_NIGHT_TIP         ), // Cycle day-night
         makeWidget({25, kFrameEffectStart + 30}, {266, 12}, WidgetType::checkbox, WindowColour::secondary, STR_ENABLE_LIGHTING_EFFECTS,  STR_ENABLE_LIGHTING_EFFECTS_TIP ), // Enable light fx
         makeWidget({40, kFrameEffectStart + 45}, {251, 12}, WidgetType::checkbox, WindowColour::secondary, STR_ENABLE_LIGHTING_VEHICLES, STR_ENABLE_LIGHTING_VEHICLES_TIP), // Enable light fx for vehicles
         makeWidget({10, kFrameEffectStart + 60}, {281, 12}, WidgetType::checkbox, WindowColour::secondary, STR_RENDER_WEATHER_EFFECTS,   STR_RENDER_WEATHER_EFFECTS_TIP  ), // Render weather effects
-        makeWidget({25, kFrameEffectStart + 75}, {266, 12}, WidgetType::checkbox, WindowColour::secondary, STR_DISABLE_LIGHTNING_EFFECT, STR_DISABLE_LIGHTNING_EFFECT_TIP)  // Disable lightning effect
+        makeWidget({25, kFrameEffectStart + 75}, {266, 12}, WidgetType::checkbox, WindowColour::secondary, STR_WEATHER_ATMOSPHERE,       STR_WEATHER_ATMOSPHERE_TIP      ), // OpenGL weather atmosphere
+        makeWidget({25, kFrameEffectStart + 90}, {266, 12}, WidgetType::checkbox, WindowColour::secondary, STR_DISABLE_LIGHTNING_EFFECT, STR_DISABLE_LIGHTNING_EFFECT_TIP)  // Disable lightning effect
     );
 
     static constexpr auto window_options_culture_widgets = makeWidgets(
@@ -1080,6 +1082,12 @@ namespace OpenRCT2::Ui::Windows
                     invalidate();
                     GfxInvalidateScreen();
                     break;
+                case WIDX_WEATHER_ATMOSPHERE_CHECKBOX:
+                    Config::Get().general.weatherAtmosphere ^= 1;
+                    Config::Save();
+                    invalidate();
+                    GfxInvalidateScreen();
+                    break;
                 case WIDX_SHOW_GUEST_PURCHASES_CHECKBOX:
                     Config::Get().general.showGuestPurchases ^= 1;
                     Config::Save();
@@ -1154,6 +1162,10 @@ namespace OpenRCT2::Ui::Windows
                 WIDX_RENDER_WEATHER_EFFECTS_CHECKBOX,
                 Config::Get().general.renderWeatherEffects || Config::Get().general.renderWeatherGloom);
             setCheckboxValue(WIDX_DISABLE_LIGHTNING_EFFECT_CHECKBOX, Config::Get().general.disableLightningEffect);
+            setCheckboxValue(WIDX_WEATHER_ATMOSPHERE_CHECKBOX, Config::Get().general.weatherAtmosphere);
+            setWidgetDisabled(
+                WIDX_WEATHER_ATMOSPHERE_CHECKBOX,
+                Config::Get().general.drawingEngine != DrawingEngine::openGL || !Config::Get().general.renderWeatherEffects);
             const bool noWeather = !Config::Get().general.renderWeatherEffects && !Config::Get().general.renderWeatherGloom;
             if (noWeather)
                 setCheckboxValue(WIDX_DISABLE_LIGHTNING_EFFECT_CHECKBOX, true);

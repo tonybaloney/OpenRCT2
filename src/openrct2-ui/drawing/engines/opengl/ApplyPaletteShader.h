@@ -25,6 +25,8 @@ namespace OpenRCT2::Ui
         GLint uLightTexture{ -1 };
         GLint uLightPalette{ -1 };
         GLint uLightingEnabled{ -1 };
+        GLint uWeatherTexture{ -1 };
+        GLint uWeather{ -1 };
 
         GLint vPosition{ -1 };
         GLint vTextureCoordinate{ -1 };
@@ -35,6 +37,9 @@ namespace OpenRCT2::Ui
         GLuint _lightPaletteTexture{};
         uint32_t _lightWidth{};
         uint32_t _lightHeight{};
+        GLuint _weatherTexture{};
+        uint32_t _weatherWidth{};
+        uint32_t _weatherHeight{};
 
     public:
         ApplyPaletteShader();
@@ -45,6 +50,8 @@ namespace OpenRCT2::Ui
         void SetLighting(
             std::span<const uint8_t> lightMap, uint32_t width, uint32_t height, const Drawing::GamePalette& palette);
         void DisableLighting();
+        void SetWeather(
+            std::span<const uint8_t> mask, uint32_t width, uint32_t height, float mist, float rain, float time, bool snow);
 
         void Draw();
 

@@ -22,11 +22,13 @@
     #include "SwapFramebuffer.h"
     #include "TextureCache.h"
     #include "TransparencyDepth.h"
+    #include "WeatherAtmosphere.h"
 
     #include <SDL_video.h>
     #include <algorithm>
     #include <cassert>
     #include <cmath>
+    #include <openrct2/GameState.h>
     #include <openrct2/config/Config.h>
     #include <openrct2/drawing/Drawing.Sprite.h>
     #include <openrct2/drawing/Drawing.String.h>
@@ -151,6 +153,8 @@ class OpenGLWeatherDrawer final : public IWeatherDrawer
     OpenGLDrawingContext* _drawingContext;
 
 public:
+    WeatherAtmosphere atmosphere;
+
     explicit OpenGLWeatherDrawer(OpenGLDrawingContext* drawingContext)
         : _drawingContext(drawingContext)
     {
@@ -160,6 +164,7 @@ public:
         RenderTarget& rt, int32_t x, int32_t y, int32_t width, int32_t height, int32_t xStart, int32_t yStart,
         const uint8_t* weatherpattern) override
     {
+        atmosphere.AddRegion(x, y, width, height);
         const uint8_t* pattern = weatherpattern;
         auto patternXSpace = *pattern++;
         auto patternYSpace = *pattern++;
@@ -333,6 +338,10 @@ public:
         assert(_screenFramebuffer != nullptr);
 
         _drawingContext->StartNewDraw();
+        _weatherDrawer.atmosphere.BeginFrame(
+            _width, _height, getGameState().weatherCurrent.level,
+            Config::Get().general.weatherAtmosphere && Config::Get().general.renderWeatherEffects,
+            Weather::isSnowing() || Weather::isTransitioningToSnow());
     }
 
     void EndDraw() override
@@ -362,6 +371,10 @@ public:
         {
             _applyPaletteShader->DisableLighting();
         }
+        const auto& atmosphere = _weatherDrawer.atmosphere;
+        _applyPaletteShader->SetWeather(
+            atmosphere.GetMask(), _width, _height, atmosphere.GetMist(), atmosphere.GetRain(),
+            static_cast<float>(getGameState().currentTicks) / 40.0f, atmosphere.IsSnow());
         _applyPaletteShader->Draw();
 
         if (_smoothScaleFramebuffer != nullptr)
