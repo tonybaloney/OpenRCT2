@@ -240,13 +240,7 @@ public:
 
     ~OpenGLDrawingEngine() override
     {
-        _drawingContext.reset();
         _applyPaletteShader.reset();
-        _copyRectShader.reset();
-        _screenFramebuffer.reset();
-        _scaleFramebuffer.reset();
-        _smoothScaleFramebuffer.reset();
-        _tempFramebuffer.reset();
         SDL_GL_DeleteContext(_context);
     }
 
@@ -279,9 +273,6 @@ public:
 
     void Resize(uint32_t width, uint32_t height) override
     {
-        if (width == 0 || height == 0)
-            return;
-
         ConfigureBits(width, height, width);
         ConfigureCanvas();
         ConfigureDirtyGrid();
