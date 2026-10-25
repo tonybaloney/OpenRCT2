@@ -30,7 +30,8 @@ namespace OpenRCT2::Ui
 
     public:
         explicit OpenGLFramebuffer(SDL_Window* window);
-        OpenGLFramebuffer(int32_t width, int32_t height, bool depth = true, bool integer = true, bool word = false);
+        OpenGLFramebuffer(
+            int32_t width, int32_t height, bool depth = true, bool integer = true, GLenum integerFormat = GL_R8UI);
         ~OpenGLFramebuffer();
 
         OpenGLFramebuffer(const OpenGLFramebuffer&) = delete;

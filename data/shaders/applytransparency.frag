@@ -25,6 +25,10 @@ void main()
         transparent = 0u;
     }
 
+    uint water = (transparent == 0u || (transparent & 0x20000u) != 0u)
+        ? (opaque & 0x100u) : ((transparent & 0x10000u) >> 8u);
+    opaque &= 0xffu;
+    transparent &= 0xffffu;
     uint blendColour = (transparent & 0xff00u) >> 8;
     if (blendColour > 0u)
     {
@@ -41,4 +45,5 @@ void main()
     {
         oColour = texture(uPaletteTex, vec2(opaque, transparent) / 256.f).r;
     }
+    oColour |= water;
 }

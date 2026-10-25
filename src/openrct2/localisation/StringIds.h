@@ -1797,6 +1797,8 @@ enum : StringId
 
     STR_WEATHER_ATMOSPHERE = 7082,
     STR_WEATHER_ATMOSPHERE_TIP = 7083,
+    STR_WATER_SHIMMER = 7084,
+    STR_WATER_SHIMMER_TIP = 7085,
 
     // Have to include resource strings (from scenarios and objects) for the time being now that language is partially working
     /* MAX_STR_COUNT = 32768 */ // MAX_STR_COUNT - upper limit for number of strings, not the current count strings

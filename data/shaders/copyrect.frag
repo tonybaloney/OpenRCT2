@@ -1,11 +1,11 @@
 #version 330 core
 
 in vec2 fTextureCoordinate;
-out vec4 fragColor;
+out uint fragColor;
 
-uniform sampler2D uTexture;
+uniform usampler2D uTexture;
 
 void main()
 {
-    fragColor = texture(uTexture, fTextureCoordinate);
+    fragColor = texture(uTexture, fTextureCoordinate).r;
 }

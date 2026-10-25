@@ -6,6 +6,9 @@ const int FLAG_NO_TEXTURE           = (1 << 2);
 const int FLAG_MASK                 = (1 << 3);
 const int FLAG_CROSS_HATCH          = (1 << 4);
 const int FLAG_TTF_TEXT             = (1 << 5);
+const int FLAG_WATER                = (1 << 6);
+const int FLAG_WATER_TRANSPARENT    = (1 << 7);
+const int FLAG_WATER_PRESERVE       = (1 << 16);
 
 uniform usampler2DArray uTexture;
 uniform usampler2D      uPaletteTex;
@@ -122,5 +125,8 @@ void main()
         }
     }
 
-    oColour = texel;
+    // Transparent coverage uses bits above TTF's packed blend colour; final coverage uses bit 8.
+    oColour = texel | (((fFlags & FLAG_WATER_TRANSPARENT) != 0) ? 0x10000u : 0u)
+                   | (((fFlags & FLAG_WATER) != 0) ? 0x100u : 0u)
+                   | (((fFlags & FLAG_WATER_PRESERVE) != 0) ? 0x20000u : 0u);
 }

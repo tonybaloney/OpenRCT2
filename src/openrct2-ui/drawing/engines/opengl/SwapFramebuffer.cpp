@@ -21,9 +21,9 @@ constexpr GLfloat kDepthValueTransparent[1] = { 0.0f };
 constexpr GLuint kIndexValue[4] = { 0, 0, 0, 0 };
 
 SwapFramebuffer::SwapFramebuffer(int32_t width, int32_t height)
-    : _opaqueFramebuffer(width, height)
-    , _transparentFramebuffer(width, height, true, true, true)
-    , _mixFramebuffer(width, height, false)
+    : _opaqueFramebuffer(width, height, true, true, GL_R16UI)
+    , _transparentFramebuffer(width, height, true, true, GL_R32UI)
+    , _mixFramebuffer(width, height, false, true, GL_R16UI)
     , _backDepth(OpenGLFramebuffer::CreateDepthTexture(width, height))
 {
     _transparentFramebuffer.Bind();

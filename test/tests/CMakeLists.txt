@@ -40,7 +40,8 @@ set(test_files
    "${CMAKE_CURRENT_SOURCE_DIR}/TileElements.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/TileElementsView.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/WidgetStateTests.cpp"
-   "${CMAKE_CURRENT_SOURCE_DIR}/WeatherAtmosphereTests.cpp")
+   "${CMAKE_CURRENT_SOURCE_DIR}/WeatherAtmosphereTests.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/WaterShimmerTests.cpp")
 
 add_executable(OpenRCT2Tests ${test_files})
 add_executable(OpenRCT2::OpenRCT2Tests ALIAS OpenRCT2Tests)

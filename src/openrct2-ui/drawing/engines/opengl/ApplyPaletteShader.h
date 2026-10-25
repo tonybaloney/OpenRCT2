@@ -27,6 +27,7 @@ namespace OpenRCT2::Ui
         GLint uLightingEnabled{ -1 };
         GLint uWeatherTexture{ -1 };
         GLint uWeather{ -1 };
+        GLint uWaterShimmer{ -1 };
 
         GLint vPosition{ -1 };
         GLint vTextureCoordinate{ -1 };
@@ -50,6 +51,7 @@ namespace OpenRCT2::Ui
         void SetLighting(
             std::span<const uint8_t> lightMap, uint32_t width, uint32_t height, const Drawing::GamePalette& palette);
         void DisableLighting();
+        void SetWaterShimmer(bool enabled, float time);
         void SetWeather(
             std::span<const uint8_t> mask, uint32_t width, uint32_t height, float mist, float rain, float time, bool snow);
 

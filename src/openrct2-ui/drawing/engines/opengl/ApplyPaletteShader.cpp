@@ -57,6 +57,7 @@ ApplyPaletteShader::ApplyPaletteShader()
     glCall(glUniform1i, uLightPalette, 2);
     glCall(glUniform1i, uWeatherTexture, 3);
     glCall(glUniform4f, uWeather, 0, 0, 0, 0);
+    SetWaterShimmer(false, 0);
     DisableLighting();
 
     glCall(glGenTextures, 1, &_lightTexture);
@@ -92,6 +93,7 @@ void ApplyPaletteShader::GetLocations()
     uLightingEnabled = GetUniformLocation("uLightingEnabled");
     uWeatherTexture = GetUniformLocation("uWeatherTexture");
     uWeather = GetUniformLocation("uWeather");
+    uWaterShimmer = GetUniformLocation("uWaterShimmer");
 
     vPosition = GetAttributeLocation("vPosition");
     vTextureCoordinate = GetAttributeLocation("vTextureCoordinate");
@@ -131,6 +133,11 @@ void ApplyPaletteShader::SetLighting(
 void ApplyPaletteShader::DisableLighting()
 {
     glCall(glUniform1i, uLightingEnabled, GL_FALSE);
+}
+
+void ApplyPaletteShader::SetWaterShimmer(bool enabled, float time)
+{
+    glCall(glUniform2f, uWaterShimmer, enabled ? 1.0f : 0.0f, time);
 }
 
 void ApplyPaletteShader::SetWeather(

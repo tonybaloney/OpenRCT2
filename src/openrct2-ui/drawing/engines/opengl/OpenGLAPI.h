@@ -39,6 +39,7 @@
     #define glTexImage2D __static__glTexImage2D
     #define glTexParameteri __static__glTexParameteri
     #define glViewport __static__glViewport
+    #define glScissor __static__glScissor
     #define glTexSubImage3D __static__glTexSubImage3D
     #define glTexImage3D __static__glTexImage3D
     #define glGetIntegerv __static__glGetIntegerv
@@ -83,6 +84,7 @@
     #undef glTexImage2D
     #undef glTexParameteri
     #undef glViewport
+    #undef glScissor
     #undef glTexSubImage3D
     #undef glTexImage3D
     #undef glGetIntegerv
@@ -117,6 +119,7 @@ using PFNGLTEXIMAGE2DPROC = void(APIENTRYP)(
     const GLvoid* pixels);
 using PFNGLTEXPARAMETERIPROC = void(APIENTRYP)(GLenum target, GLenum pname, GLint param);
 using PFNGLVIEWPORTPROC = void(APIENTRYP)(GLint x, GLint y, GLsizei width, GLsizei height);
+using PFNGLSCISSORPROC = void(APIENTRYP)(GLint x, GLint y, GLsizei width, GLsizei height);
 using PFNGLTEXSUBIMAGE3DPROC = void(APIENTRYP)(
     GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth,
     GLenum format, GLenum type, const GLvoid* data);

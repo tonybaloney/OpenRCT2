@@ -8,6 +8,8 @@ uniform bool uLightingEnabled;
 uniform usampler2D uWeatherTexture;
 // Mist opacity, foreground rain opacity, simulation time, snow.
 uniform vec4 uWeather;
+// Enabled, simulation time.
+uniform vec2 uWaterShimmer;
 
 in vec2 fTextureCoordinate;
 
@@ -40,7 +42,8 @@ float rainLayer(vec2 pixel, float scale, float speed)
 
 void main()
 {
-    uint index = texture(uTexture, fTextureCoordinate).r;
+    uint surface = texture(uTexture, fTextureCoordinate).r;
+    uint index = surface & 0xffu;
     vec4 colour = uPalette[index];
     if (uLightingEnabled)
     {
@@ -51,6 +54,16 @@ void main()
         uvec3 exposure = (light * intensity * 6u) >> 8u;
         uvec3 lit = base + ((uvec3(255u) - base) * exposure) / (uvec3(255u) + exposure);
         colour.rgb = vec3(lit) / 255.0;
+    }
+    if (uWaterShimmer.x > 0.0 && (surface & 0x100u) != 0u)
+    {
+        vec2 pixel = fTextureCoordinate * vec2(textureSize(uTexture, 0));
+        float time = uWaterShimmer.y;
+        float wave = sin(pixel.y * 0.42 + sin(pixel.x * 0.065 + time * 0.7) * 1.7 - time * 1.5);
+        float broken = smoothstep(0.42, 0.78, noise(pixel / vec2(23.0, 7.0) + vec2(time * 0.16, 0.0)));
+        // Small signed modulation preserves the palette's hue and night brightness.
+        float shimmer = wave * broken * 0.055;
+        colour.rgb = clamp(colour.rgb * (1.0 + shimmer), 0.0, 1.0);
     }
     if (uWeather.x > 0.0)
     {

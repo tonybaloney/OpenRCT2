@@ -65,6 +65,7 @@
     <ClInclude Include="drawing\engines\opengl\TextureCache.h" />
     <ClInclude Include="drawing\engines\opengl\TransparencyDepth.h" />
     <ClInclude Include="drawing\engines\opengl\WeatherAtmosphere.h" />
+    <ClInclude Include="drawing\engines\opengl\WaterShimmer.h" />
     <ClInclude Include="input\InputManager.h" />
     <ClInclude Include="input\MouseInput.h" />
     <ClInclude Include="input\ShortcutIds.h" />

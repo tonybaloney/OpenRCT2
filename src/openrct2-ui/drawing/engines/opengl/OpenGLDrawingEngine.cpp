@@ -22,6 +22,7 @@
     #include "SwapFramebuffer.h"
     #include "TextureCache.h"
     #include "TransparencyDepth.h"
+    #include "WaterShimmer.h"
     #include "WeatherAtmosphere.h"
 
     #include <SDL_video.h>
@@ -42,6 +43,7 @@
     #include <openrct2/drawing/WeatherDrawer.h>
     #include <openrct2/interface/Screenshot.h>
     #include <openrct2/interface/Window.h>
+    #include <openrct2/interface/WindowBase.h>
     #include <openrct2/ui/UiContext.h>
     #include <openrct2/world/Weather.h>
 
@@ -143,6 +145,7 @@ public:
     }
 
 private:
+    void DrawSprite(RenderTarget& rt, ImageId imageId, int32_t x, int32_t y, bool waterSurface);
     void FlushLines();
     void FlushRectangles();
     void HandleTransparency();
@@ -283,7 +286,7 @@ public:
         ConfigureDirtyGrid();
 
         _drawingContext->Resize(width, height);
-        _tempFramebuffer = std::make_unique<OpenGLFramebuffer>(width, height);
+        _tempFramebuffer = std::make_unique<OpenGLFramebuffer>(width, height, true, true, GL_R16UI);
 
         _drawingContext->StartNewDraw();
         _drawingContext->Clear(_mainRT, PaletteIndex::pi10);
@@ -375,7 +378,27 @@ public:
         _applyPaletteShader->SetWeather(
             atmosphere.GetMask(), _width, _height, atmosphere.GetMist(), atmosphere.GetRain(),
             static_cast<float>(getGameState().currentTicks) / 40.0f, atmosphere.IsSnow());
+        _applyPaletteShader->SetWaterShimmer(
+            Config::Get().general.waterShimmer, static_cast<float>(getGameState().currentTicks) / 40.0f);
         _applyPaletteShader->Draw();
+
+        if (Config::Get().general.waterShimmer)
+        {
+            // Transparent windows can leave water visible underneath. Restore their entire bounds without shimmer.
+            _applyPaletteShader->SetWaterShimmer(false, 0);
+            glEnable(GL_SCISSOR_TEST);
+            WindowVisitEach([this](WindowBase* window) {
+                if (window == WindowGetMain())
+                    return;
+                const auto left = std::clamp(window->windowPos.x, 0, static_cast<int32_t>(_width));
+                const auto right = std::clamp(window->windowPos.x + window->width, left, static_cast<int32_t>(_width));
+                const auto top = std::clamp(window->windowPos.y, 0, static_cast<int32_t>(_height));
+                const auto bottom = std::clamp(window->windowPos.y + window->height, top, static_cast<int32_t>(_height));
+                glScissor(left, _height - bottom, right - left, bottom - top);
+                _applyPaletteShader->Draw();
+            });
+            glDisable(GL_SCISSOR_TEST);
+        }
 
         if (_smoothScaleFramebuffer != nullptr)
         {
@@ -396,7 +419,7 @@ public:
 
     void PaintWindows() override
     {
-        if (Weather::hasWeatherEffect() || gPaintForceRedraw || LightFx::IsAvailable())
+        if (Weather::hasWeatherEffect() || gPaintForceRedraw || LightFx::IsAvailable() || Config::Get().general.waterShimmer)
         {
             WindowUpdateAllViewports();
             // OpenGL doesn't support restoring pixels, always redraw.
@@ -768,7 +791,8 @@ void OpenGLDrawingContext::FilterRect(
     command.palettes = { 0, 0, 0 };
     command.colour = TextureCache::PaletteToY(palette);
     command.bounds = { left, top, right + 1, bottom + 1 };
-    command.flags = DrawRectCommand::FLAG_NO_TEXTURE;
+    // Destination-only filters (including weather gloom) do not introduce a new surface.
+    command.flags = DrawRectCommand::FLAG_NO_TEXTURE | DrawRectCommand::FLAG_WATER_PRESERVE;
     command.depth = _drawCount++;
     command.zoom = 1.0f;
 }
@@ -888,6 +912,12 @@ static auto EuclideanRemainder(const auto a, const auto b)
 
 void OpenGLDrawingContext::DrawSprite(RenderTarget& rt, const ImageId imageId, const int32_t x, const int32_t y)
 {
+    DrawSprite(rt, imageId, x, y, Config::Get().general.waterShimmer && IsWaterSurfaceImage(imageId));
+}
+
+void OpenGLDrawingContext::DrawSprite(
+    RenderTarget& rt, const ImageId imageId, const int32_t x, const int32_t y, const bool waterSurface)
+{
     Guard::Assert(_inDraw == true);
 
     auto g1Element = GfxGetG1Element(imageId);
@@ -908,7 +938,7 @@ void OpenGLDrawingContext::DrawSprite(RenderTarget& rt, const ImageId imageId, c
             zoomedRT.width = rt.width;
             zoomedRT.pitch = rt.pitch;
             zoomedRT.zoom_level = rt.zoom_level - 1;
-            DrawSprite(zoomedRT, imageId.WithIndex(imageId.GetIndex() - g1Element->zoomedOffset), x >> 1, y >> 1);
+            DrawSprite(zoomedRT, imageId.WithIndex(imageId.GetIndex() - g1Element->zoomedOffset), x >> 1, y >> 1, waterSurface);
             return;
         }
         if (g1Element->flags.has(G1Flag::noZoomDraw))
@@ -986,6 +1016,7 @@ void OpenGLDrawingContext::DrawSprite(RenderTarget& rt, const ImageId imageId, c
         paletteCount = 0;
     }
 
+    const auto waterFlag = waterSurface ? DrawRectCommand::FLAG_WATER : 0;
     if (special || imageId.IsBlended())
     {
         DrawRectCommand& command = _commandBuffers.transparent.allocate();
@@ -998,7 +1029,8 @@ void OpenGLDrawingContext::DrawSprite(RenderTarget& rt, const ImageId imageId, c
         command.palettes = palettes;
         command.colour = palettes.x - (special ? 1 : 0);
         command.bounds = { left, top, right, bottom };
-        command.flags = special ? 0 : DrawRectCommand::FLAG_NO_TEXTURE | DrawRectCommand::FLAG_MASK;
+        command.flags = (special ? 0 : DrawRectCommand::FLAG_NO_TEXTURE | DrawRectCommand::FLAG_MASK)
+            | (waterFlag != 0 ? DrawRectCommand::FLAG_WATER_TRANSPARENT : 0);
         command.depth = _drawCount++;
         command.zoom = zoom;
     }
@@ -1014,7 +1046,7 @@ void OpenGLDrawingContext::DrawSprite(RenderTarget& rt, const ImageId imageId, c
         command.palettes = palettes;
         command.colour = 0;
         command.bounds = { left, top, right, bottom };
-        command.flags = paletteCount;
+        command.flags = paletteCount | waterFlag;
         command.depth = _drawCount++;
         command.zoom = zoom;
     }
