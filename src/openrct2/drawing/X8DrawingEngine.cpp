@@ -187,7 +187,7 @@ void X8DrawingEngine::EndDraw()
 
 void X8DrawingEngine::PaintWindows()
 {
-    if (gPaintForceRedraw)
+    if (gPaintForceRedraw || LightFx::IsAvailable())
     {
         WindowUpdateAllViewports();
         WindowDrawAll(_mainRT, 0, 0, _width, _height);

@@ -115,6 +115,12 @@ You can translate the game into other languages by editing the language files in
 ## 4.4 Graphics
 You can help create new graphics for the game by visiting the [OpenGraphics project](https://github.com/OpenRCT2/OpenGraphics). 3D modellers needed!
 
+For warm night-time lighting during play, enable **Cycle day/night** and **Enable lighting effects** in the rendering
+options. Both the Software and OpenGL drawing engines support soft light around working path lamps, ride entrances,
+and shops. **Enable lighting effects on vehicles** also lights supported ride vehicles. Lighting is optional, does not
+change the daytime palette, and is clipped so park lights do not glow over interface windows. Lit pathways require
+working lamps; paths do not emit light on their own.
+
 ## 4.5 Audio
 You can help create the music and sound effects for the game. Check out the [OpenMusic](https://github.com/OpenRCT2/OpenMusic) repository and drop by our [#open-sound-and-music channel on Discord](https://discord.gg/9y8WbcX) to find out more.
 

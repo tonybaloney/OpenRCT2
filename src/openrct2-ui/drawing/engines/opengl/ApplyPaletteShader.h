@@ -12,6 +12,9 @@
 #include "GLSLTypes.h"
 #include "OpenGLShaderProgram.h"
 
+#include <openrct2/drawing/PaletteType.h>
+#include <span>
+
 namespace OpenRCT2::Ui
 {
     class ApplyPaletteShader final : public OpenGLShaderProgram
@@ -19,12 +22,19 @@ namespace OpenRCT2::Ui
     private:
         GLint uTexture{ -1 };
         GLint uPalette{ -1 };
+        GLint uLightTexture{ -1 };
+        GLint uLightPalette{ -1 };
+        GLint uLightingEnabled{ -1 };
 
         GLint vPosition{ -1 };
         GLint vTextureCoordinate{ -1 };
 
         GLuint _vbo{};
         GLuint _vao{};
+        GLuint _lightTexture{};
+        GLuint _lightPaletteTexture{};
+        uint32_t _lightWidth{};
+        uint32_t _lightHeight{};
 
     public:
         ApplyPaletteShader();
@@ -32,6 +42,9 @@ namespace OpenRCT2::Ui
 
         static void SetTexture(GLuint texture);
         void SetPalette(const vec4* glPalette);
+        void SetLighting(
+            std::span<const uint8_t> lightMap, uint32_t width, uint32_t height, const Drawing::GamePalette& palette);
+        void DisableLighting();
 
         void Draw();
 

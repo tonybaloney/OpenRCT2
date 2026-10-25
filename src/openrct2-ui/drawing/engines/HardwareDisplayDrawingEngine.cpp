@@ -237,14 +237,13 @@ private:
     {
         auto* viewport = WindowGetViewport(WindowGetMain());
 
-        if (Config::Get().general.enableLightFx && viewport != nullptr)
+        if (LightFx::IsAvailable() && viewport != nullptr)
         {
             void* pixels;
             int32_t pitch;
             if (SDL_LockTexture(_screenTexture, nullptr, &pixels, &pitch) == 0)
             {
-                LightFx::RenderToTexture(
-                    *viewport, pixels, pitch, _bits, _width, _height, _paletteHWMapped, _lightPaletteHWMapped);
+                LightFx::RenderToTexture(*viewport, pixels, pitch, _mainRT, _paletteHWMapped, _lightPaletteHWMapped);
                 SDL_UnlockTexture(_screenTexture);
             }
         }

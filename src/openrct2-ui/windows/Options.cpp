@@ -1139,8 +1139,7 @@ namespace OpenRCT2::Ui::Windows
             widgets[WIDX_VIRTUAL_FLOOR].text = _virtualFloorStyleStrings[EnumValue(Config::Get().general.virtualFloorStyle)];
 
             setCheckboxValue(WIDX_ENABLE_LIGHT_FX_CHECKBOX, Config::Get().general.enableLightFx);
-            const bool lightFxEnabled = Config::Get().general.dayNightCycle
-                && Config::Get().general.drawingEngine == DrawingEngine::softwareWithHardwareDisplay;
+            const bool lightFxEnabled = Config::Get().general.dayNightCycle;
             setWidgetDisabled(WIDX_ENABLE_LIGHT_FX_CHECKBOX, !lightFxEnabled);
             if (!lightFxEnabled)
                 Config::Get().general.enableLightFx = false;

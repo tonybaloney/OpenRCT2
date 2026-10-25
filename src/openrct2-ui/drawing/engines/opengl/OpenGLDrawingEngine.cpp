@@ -235,11 +235,18 @@ public:
     {
         _window = static_cast<SDL_Window*>(_uiContext.GetWindow());
         _mainRT.DrawingEngine = this;
-        LightFx::SetAvailable(false);
+        LightFx::SetAvailable(true);
     }
 
     ~OpenGLDrawingEngine() override
     {
+        _drawingContext.reset();
+        _applyPaletteShader.reset();
+        _copyRectShader.reset();
+        _screenFramebuffer.reset();
+        _scaleFramebuffer.reset();
+        _smoothScaleFramebuffer.reset();
+        _tempFramebuffer.reset();
         SDL_GL_DeleteContext(_context);
     }
 
@@ -272,6 +279,9 @@ public:
 
     void Resize(uint32_t width, uint32_t height) override
     {
+        if (width == 0 || height == 0)
+            return;
+
         ConfigureBits(width, height, width);
         ConfigureCanvas();
         ConfigureDirtyGrid();
@@ -351,6 +361,16 @@ public:
 
         _applyPaletteShader->Use();
         _applyPaletteShader->SetTexture(_drawingContext->GetFinalFramebuffer().GetTexture());
+        const auto* viewport = WindowGetViewport(WindowGetMain());
+        if (LightFx::IsAvailable() && viewport != nullptr)
+        {
+            const auto lightMap = LightFx::RenderLightMap(*viewport, _mainRT);
+            _applyPaletteShader->SetLighting(lightMap, _width, _height, LightFx::GetPalette());
+        }
+        else
+        {
+            _applyPaletteShader->DisableLighting();
+        }
         _applyPaletteShader->Draw();
 
         if (_smoothScaleFramebuffer != nullptr)
@@ -372,7 +392,7 @@ public:
 
     void PaintWindows() override
     {
-        if (Weather::hasWeatherEffect() || gPaintForceRedraw)
+        if (Weather::hasWeatherEffect() || gPaintForceRedraw || LightFx::IsAvailable())
         {
             WindowUpdateAllViewports();
             // OpenGL doesn't support restoring pixels, always redraw.

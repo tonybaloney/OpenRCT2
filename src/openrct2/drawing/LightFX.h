@@ -12,6 +12,7 @@
 #include "PaletteType.h"
 
 #include <cstdint>
+#include <span>
 
 struct CoordsXY;
 struct CoordsXYZ;
@@ -52,8 +53,12 @@ namespace OpenRCT2::Drawing::LightFx
 
     void Init();
 
-    void UpdateBuffers(RenderTarget&);
+    void UpdateBuffers(const RenderTarget&);
     const GamePalette& GetPalette();
+    std::span<const uint8_t> RenderLightMap(const Viewport& vp, const RenderTarget& rt);
+
+    uint8_t CalculateLanternIntensity(int32_t x, int32_t y);
+    uint8_t MixLight(uint8_t colour, uint8_t light, uint8_t intensity);
 
     void Add3DLight(const EntityBase& entity, uint8_t id, const CoordsXYZ& loc, LightType lightType);
 
@@ -73,7 +78,7 @@ namespace OpenRCT2::Drawing::LightFx
 
     void ApplyPaletteFilter(uint8_t i, uint8_t* r, uint8_t* g, uint8_t* b);
     void RenderToTexture(
-        const Viewport& vp, void* dstPixels, uint32_t dstPitch, Drawing::PaletteIndex* bits, uint32_t width, uint32_t height,
-        const uint32_t* palette, const uint32_t* lightPalette);
+        const Viewport& vp, void* dstPixels, uint32_t dstPitch, const RenderTarget& rt, const uint32_t* palette,
+        const uint32_t* lightPalette);
 
 } // namespace OpenRCT2::Drawing::LightFx

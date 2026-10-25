@@ -14,6 +14,7 @@
 #include "../config/Config.h"
 #include "../entity/EntityRegistry.h"
 #include "../interface/Viewport.h"
+#include "../interface/WindowBase.h"
 #include "../paint/Paint.h"
 #include "../ride/Ride.h"
 #include "../ride/RideData.h"
@@ -22,7 +23,8 @@
 #include "../world/tile_element/TileElement.h"
 
 #include <cmath>
-#include <cstring>
+#include <mutex>
+#include <vector>
 
 namespace OpenRCT2::Drawing::LightFx
 {
@@ -37,8 +39,8 @@ namespace OpenRCT2::Drawing::LightFx
     static RenderTarget _pixelInfo;
     static bool _lightfxAvailable = false;
 
-    static void* _light_rendered_buffer_back = nullptr;
-    static void* _light_rendered_buffer_front = nullptr;
+    static std::vector<uint8_t> _lightMap;
+    static std::mutex _lightListMutex;
 
     static uint32_t _lightPolution_back = 0;
     static uint32_t _lightPolution_front = 0;
@@ -70,15 +72,10 @@ namespace OpenRCT2::Drawing::LightFx
     static uint32_t LightListCurrentCountBack;
     static uint32_t LightListCurrentCountFront;
 
-    static int16_t _current_view_x_front = 0;
-    static int16_t _current_view_y_front = 0;
+    static int32_t _current_view_x_front = 0;
+    static int32_t _current_view_y_front = 0;
     static uint8_t _current_view_rotation_front = 0;
     static ZoomLevel _current_view_zoom_front{ 0 };
-    static int16_t _current_view_x_back = 0;
-    static int16_t _current_view_y_back = 0;
-    static uint8_t _current_view_rotation_back = 0;
-    static ZoomLevel _current_view_zoom_back{ 0 };
-    static ZoomLevel _current_view_zoom_back_delay{ 0 };
 
     static GamePalette gPalette_light;
 
@@ -92,15 +89,18 @@ namespace OpenRCT2::Drawing::LightFx
         return static_cast<LightType>((static_cast<uint8_t>(type) & ~0x3) | size);
     }
 
-    static uint8_t CalcLightIntensityLantern(int32_t x, int32_t y)
+    uint8_t CalculateLanternIntensity(int32_t x, int32_t y)
     {
-        double distance = static_cast<double>(x * x + y * y);
+        const double distance = static_cast<double>(x) * x + static_cast<double>(y) * y;
+        const double radiusSquared = distance / (128.0 * 128.0);
+        if (radiusSquared >= 1.0)
+            return 0;
 
-        double light = 0.03 + std::pow(10.0 / (1.0 + distance / 100.0), 0.55);
-        light *= std::min(1.0, std::max(0.0, 2.0 - std::sqrt(distance) / 64));
-        light *= 0.1f;
+        // A bright lamp core surrounded by a broad halo that fades smoothly to zero.
+        const double core = 0.25 * std::exp(-distance / (2.0 * 18.0 * 18.0));
+        const double halo = 0.12 * std::pow(1.0 - radiusSquared, 3.0);
 
-        return static_cast<uint8_t>(std::min(255.0, light * 255.0));
+        return static_cast<uint8_t>((core + halo) * 255.0);
     }
 
     static uint8_t CalcLightIntensitySpot(int32_t x, int32_t y)
@@ -134,11 +134,14 @@ namespace OpenRCT2::Drawing::LightFx
     void SetAvailable(bool available)
     {
         _lightfxAvailable = available;
+        LightListCurrentCountBack = 0;
+        LightListCurrentCountFront = 0;
     }
 
     bool IsAvailable()
     {
-        return _lightfxAvailable && Config::Get().general.enableLightFx;
+        return _lightfxAvailable && Config::Get().general.dayNightCycle && Config::Get().general.enableLightFx
+            && gDayNightCycle > 0;
     }
 
     bool ForVehiclesIsAvailable()
@@ -150,6 +153,11 @@ namespace OpenRCT2::Drawing::LightFx
     {
         _LightListBack = _LightListA;
         _LightListFront = _LightListB;
+        LightListCurrentCountBack = 0;
+        LightListCurrentCountFront = 0;
+        _lightPolution_back = 0;
+        _lightPolution_front = 0;
+        gPalette_light.fill({});
 
         std::fill_n(_bakedLightTexture_lantern_0, 32 * 32, 0xFF);
         std::fill_n(_bakedLightTexture_lantern_1, 64 * 64, 0xFF);
@@ -162,7 +170,7 @@ namespace OpenRCT2::Drawing::LightFx
         {
             for (int32_t x = 0; x < 256; x++)
             {
-                *parcer = CalcLightIntensityLantern(x - 128, y - 128);
+                *parcer = CalculateLanternIntensity(x - 128, y - 128);
                 parcer++;
             }
         }
@@ -187,10 +195,9 @@ namespace OpenRCT2::Drawing::LightFx
         CalcRescaleLightHalf(_bakedLightTexture_spot_0, _bakedLightTexture_spot_1, 32, 32);
     }
 
-    void UpdateBuffers(RenderTarget& info)
+    void UpdateBuffers(const RenderTarget& info)
     {
-        _light_rendered_buffer_front = realloc(_light_rendered_buffer_front, info.width * info.height);
-        _light_rendered_buffer_back = realloc(_light_rendered_buffer_back, info.width * info.height);
+        _lightMap.resize(static_cast<size_t>(info.width) * info.height);
         _pixelInfo = info;
     }
 
@@ -396,7 +403,7 @@ namespace OpenRCT2::Drawing::LightFx
             if (_current_view_zoom_front > ZoomLevel{ 0 })
             {
                 const int8_t zoomNumber = static_cast<int8_t>(_current_view_zoom_front);
-                entry.lightIntensity -= 5 * zoomNumber;
+                entry.lightIntensity = static_cast<uint8_t>(std::max(0, entry.lightIntensity - 5 * zoomNumber));
                 if (GetLightTypeSize(entry.type) < zoomNumber)
                 {
                     entry.type = LightType::none;
@@ -410,17 +417,7 @@ namespace OpenRCT2::Drawing::LightFx
 
     static void SwapBuffers()
     {
-        void* tmp = _light_rendered_buffer_back;
-        _light_rendered_buffer_back = _light_rendered_buffer_front;
-        _light_rendered_buffer_front = tmp;
-
-        tmp = _light_rendered_buffer_back;
-        _light_rendered_buffer_back = _light_rendered_buffer_front;
-        _light_rendered_buffer_front = tmp;
-
-        tmp = _LightListBack;
-        _LightListBack = _LightListFront;
-        _LightListFront = static_cast<LightListEntry*>(tmp);
+        std::swap(_LightListBack, _LightListFront);
 
         LightListCurrentCountFront = LightListCurrentCountBack;
         LightListCurrentCountBack = 0x0;
@@ -428,30 +425,19 @@ namespace OpenRCT2::Drawing::LightFx
         uint32_t uTmp = _lightPolution_back;
         _lightPolution_back = _lightPolution_front;
         _lightPolution_front = uTmp;
-
-        _current_view_x_front = _current_view_x_back;
-        _current_view_y_front = _current_view_y_back;
-        _current_view_rotation_front = _current_view_rotation_back;
-        _current_view_zoom_front = _current_view_zoom_back_delay;
-        _current_view_zoom_back_delay = _current_view_zoom_back;
     }
 
     static void UpdateViewportSettings(const Viewport& vp)
     {
-        _current_view_x_back = vp.viewPos.x;
-        _current_view_y_back = vp.viewPos.y;
-        _current_view_rotation_back = vp.rotation;
-        _current_view_zoom_back = vp.zoom;
+        _current_view_x_front = vp.viewPos.x;
+        _current_view_y_front = vp.viewPos.y;
+        _current_view_rotation_front = vp.rotation;
+        _current_view_zoom_front = vp.zoom;
     }
 
-    static void RenderLightsToFrontBuffer()
+    static void RenderLightsToFrontBuffer(const Viewport& vp)
     {
-        if (_light_rendered_buffer_front == nullptr)
-        {
-            return;
-        }
-
-        std::memset(_light_rendered_buffer_front, 0, _pixelInfo.width * _pixelInfo.height);
+        std::fill(_lightMap.begin(), _lightMap.end(), 0);
 
         _lightPolution_back = 0;
 
@@ -460,11 +446,7 @@ namespace OpenRCT2::Drawing::LightFx
         for (uint32_t light = 0; light < LightListCurrentCountFront; light++)
         {
             const uint8_t* bufReadBase = nullptr;
-            uint8_t* bufWriteBase = static_cast<uint8_t*>(_light_rendered_buffer_front);
             uint32_t bufReadWidth, bufReadHeight;
-            int32_t bufWriteX, bufWriteY;
-            int32_t bufWriteWidth, bufWriteHeight;
-            uint32_t bufReadSkip, bufWriteSkip;
 
             LightListEntry& entry = _LightListFront[light];
 
@@ -478,6 +460,8 @@ namespace OpenRCT2::Drawing::LightFx
                 inRectCentreX = _current_view_zoom_front.ApplyInversedTo(inRectCentreX);
                 inRectCentreY = _current_view_zoom_front.ApplyInversedTo(inRectCentreY);
             }
+            inRectCentreX += vp.pos.x;
+            inRectCentreY += vp.pos.y;
 
             switch (entry.type)
             {
@@ -525,100 +509,75 @@ namespace OpenRCT2::Drawing::LightFx
                     continue;
             }
 
-            // Clamp the reads to be no larger than the buffer size
-            bufReadHeight = std::min<uint32_t>(_pixelInfo.height, bufReadHeight);
-            bufReadWidth = std::min<uint32_t>(_pixelInfo.width, bufReadWidth);
-
-            bufWriteX = inRectCentreX - bufReadWidth / 2;
-            bufWriteY = inRectCentreY - bufReadHeight / 2;
-
-            bufWriteWidth = bufReadWidth;
-            bufWriteHeight = bufReadHeight;
-
-            if (bufWriteX < 0)
-            {
-                bufReadBase += -bufWriteX;
-                bufWriteWidth += bufWriteX;
-            }
-            else
-            {
-                bufWriteBase += bufWriteX;
-            }
-
-            if (bufWriteWidth <= 0)
+            const int32_t scale = vp.zoom < ZoomLevel{ 0 } ? vp.zoom.ApplyInversedTo(1) : 1;
+            const int32_t originX = inRectCentreX - static_cast<int32_t>(bufReadWidth) * scale / 2;
+            const int32_t originY = inRectCentreY - static_cast<int32_t>(bufReadHeight) * scale / 2;
+            const int32_t left = std::max(0, originX);
+            const int32_t top = std::max(0, originY);
+            const int32_t right = std::min(_pixelInfo.width, originX + static_cast<int32_t>(bufReadWidth) * scale);
+            const int32_t bottom = std::min(_pixelInfo.height, originY + static_cast<int32_t>(bufReadHeight) * scale);
+            if (left >= right || top >= bottom)
                 continue;
 
-            if (bufWriteY < 0)
+            _lightPolution_back += ((right - left) * (bottom - top)) / 256;
+            for (int32_t y = top; y < bottom; y++)
             {
-                bufReadBase += -bufWriteY * bufReadWidth;
-                bufWriteHeight += bufWriteY;
-            }
-            else
-            {
-                bufWriteBase += bufWriteY * _pixelInfo.width;
-            }
-
-            if (bufWriteHeight <= 0)
-                continue;
-
-            int32_t rightEdge = bufWriteX + bufWriteWidth;
-            int32_t bottomEdge = bufWriteY + bufWriteHeight;
-
-            if (rightEdge > _pixelInfo.width)
-            {
-                bufWriteWidth -= rightEdge - _pixelInfo.width;
-            }
-            if (bottomEdge > _pixelInfo.height)
-            {
-                bufWriteHeight -= bottomEdge - _pixelInfo.height;
-            }
-
-            if (bufWriteWidth <= 0)
-                continue;
-            if (bufWriteHeight <= 0)
-                continue;
-
-            _lightPolution_back += (bufWriteWidth * bufWriteHeight) / 256;
-
-            bufReadSkip = bufReadWidth - bufWriteWidth;
-            bufWriteSkip = _pixelInfo.width - bufWriteWidth;
-
-            if (entry.lightIntensity == 0xFF)
-            {
-                for (int32_t y = 0; y < bufWriteHeight; y++)
+                auto* dst = _lightMap.data() + static_cast<size_t>(y) * _pixelInfo.width;
+                const auto* src = bufReadBase + (y - originY) / scale * bufReadWidth;
+                for (int32_t x = left; x < right; x++)
                 {
-                    for (int32_t x = 0; x < bufWriteWidth; x++)
-                    {
-                        *bufWriteBase = std::min(0xFF, *bufWriteBase + *bufReadBase);
-                        bufWriteBase++;
-                        bufReadBase++;
-                    }
-
-                    bufWriteBase += bufWriteSkip;
-                    bufReadBase += bufReadSkip;
-                }
-            }
-            else
-            {
-                for (int32_t y = 0; y < bufWriteHeight; y++)
-                {
-                    for (int32_t x = 0; x < bufWriteWidth; x++)
-                    {
-                        *bufWriteBase = std::min(0xFF, *bufWriteBase + (((*bufReadBase) * (1 + entry.lightIntensity)) >> 8));
-                        bufWriteBase++;
-                        bufReadBase++;
-                    }
-
-                    bufWriteBase += bufWriteSkip;
-                    bufReadBase += bufReadSkip;
+                    const auto intensity = (src[(x - originX) / scale] * (1 + entry.lightIntensity)) >> 8;
+                    dst[x] = static_cast<uint8_t>(std::min(255, dst[x] + intensity));
                 }
             }
         }
     }
 
-    static void* GetFrontBuffer()
+    std::span<const uint8_t> RenderLightMap(const Viewport& vp, const RenderTarget& rt)
     {
-        return _light_rendered_buffer_front;
+        if (_pixelInfo.width != rt.width || _pixelInfo.height != rt.height)
+            UpdateBuffers(rt);
+
+        SwapBuffers();
+        UpdateViewportSettings(vp);
+        PrepareLightList(vp);
+        // Occlusion sampling paints tiles too; those queries must not keep removed lights alive.
+        LightListCurrentCountBack = 0;
+        RenderLightsToFrontBuffer(vp);
+
+        const auto left = std::clamp(vp.pos.x, 0, rt.width);
+        const auto right = std::clamp(vp.pos.x + vp.width, left, rt.width);
+        const auto top = std::clamp(vp.pos.y, 0, rt.height);
+        const auto bottom = std::clamp(vp.pos.y + vp.height, top, rt.height);
+        for (int32_t y = 0; y < rt.height; y++)
+        {
+            auto row = _lightMap.begin() + static_cast<size_t>(y) * rt.width;
+            if (y < top || y >= bottom)
+            {
+                std::fill_n(row, rt.width, 0);
+            }
+            else
+            {
+                std::fill_n(row, left, 0);
+                std::fill(row + right, row + rt.width, 0);
+            }
+        }
+
+        // The final framebuffer also contains windows; park lights must not spill over controls.
+        WindowVisitEach([&](WindowBase* window) {
+            if (window == WindowGetMain())
+                return;
+            const auto windowLeft = std::clamp(window->windowPos.x, left, right);
+            const auto windowRight = std::clamp(window->windowPos.x + window->width, windowLeft, right);
+            const auto windowTop = std::clamp(window->windowPos.y, top, bottom);
+            const auto windowBottom = std::clamp(window->windowPos.y + window->height, windowTop, bottom);
+            for (auto y = windowTop; y < windowBottom; y++)
+            {
+                auto row = _lightMap.begin() + static_cast<size_t>(y) * rt.width;
+                std::fill(row + windowLeft, row + windowRight, 0);
+            }
+        });
+        return _lightMap;
     }
 
     const GamePalette& GetPalette()
@@ -629,6 +588,7 @@ namespace OpenRCT2::Drawing::LightFx
     static void Add3DLight(
         const uint32_t lightHash, const Qualifier qualifier, const uint8_t id, const CoordsXYZ& loc, const LightType lightType)
     {
+        std::lock_guard lock(_lightListMutex);
         if (LightListCurrentCountBack == 15999)
         {
             return;
@@ -837,6 +797,10 @@ namespace OpenRCT2::Drawing::LightFx
 
     void ApplyPaletteFilter(uint8_t i, uint8_t* r, uint8_t* g, uint8_t* b)
     {
+        gPalette_light[i] = {};
+        if (gDayNightCycle <= 0 || Weather::gLightningFlash != 0)
+            return;
+
         auto& gameState = getGameState();
 
         float night = static_cast<float>(pow(gDayNightCycle, 1.5));
@@ -846,8 +810,8 @@ namespace OpenRCT2::Drawing::LightFx
         float natLightB = 1.0f;
 
         float elecMultR = 1.0f;
-        float elecMultG = 0.95f;
-        float elecMultB = 0.45f;
+        float elecMultG = 0.72f;
+        float elecMultB = 0.32f;
 
         static float wetness = 0.0f;
         static float fogginess = 0.0f;
@@ -1002,49 +966,38 @@ namespace OpenRCT2::Drawing::LightFx
                     (-overExpose + static_cast<float>(*b) * reduceColourNat * natLightB + envFog * fogB + addLightNatB))));
 
             auto dstEntry = &gPalette_light[i];
-            dstEntry->red = static_cast<uint8_t>(
-                std::min<float>(0xFF, (static_cast<float>(*r) * reduceColourLit * boost + lightFog) * elecMultR));
-            dstEntry->green = static_cast<uint8_t>(
-                std::min<float>(0xFF, (static_cast<float>(*g) * reduceColourLit * boost + lightFog) * elecMultG));
-            dstEntry->blue = static_cast<uint8_t>(
-                std::min<float>(0xFF, (static_cast<float>(*b) * reduceColourLit * boost + lightFog) * elecMultB));
+            dstEntry->red = static_cast<uint8_t>(std::min<float>(
+                0xFF, (static_cast<float>(*r) * reduceColourLit * boost + lightFog + 12.0f * night) * elecMultR));
+            dstEntry->green = static_cast<uint8_t>(std::min<float>(
+                0xFF, (static_cast<float>(*g) * reduceColourLit * boost + lightFog + 12.0f * night) * elecMultG));
+            dstEntry->blue = static_cast<uint8_t>(std::min<float>(
+                0xFF, (static_cast<float>(*b) * reduceColourLit * boost + lightFog + 12.0f * night) * elecMultB));
         }
     }
 
-    static uint8_t MixLight(uint32_t a, uint32_t b, uint32_t intensity)
+    uint8_t MixLight(uint8_t a, uint8_t b, uint8_t intensity)
     {
-        intensity = intensity * 6;
-        uint32_t bMul = (b * intensity) >> 8;
-        uint32_t ab = a + bMul;
-        uint8_t result = static_cast<uint8_t>(std::min<uint32_t>(255, ab));
-        return result;
+        const uint32_t exposure = (static_cast<uint32_t>(b) * intensity * 6) >> 8;
+        // Roll off overlapping lights instead of clipping sprite detail to white.
+        return static_cast<uint8_t>(a + (255u - a) * exposure / (255u + exposure));
     }
 
     void RenderToTexture(
-        const Viewport& vp, void* dstPixels, uint32_t dstPitch, PaletteIndex* bits, uint32_t width, uint32_t height,
-        const uint32_t* palette, const uint32_t* lightPalette)
+        const Viewport& vp, void* dstPixels, uint32_t dstPitch, const RenderTarget& rt, const uint32_t* palette,
+        const uint32_t* lightPalette)
     {
-        UpdateViewportSettings(vp);
-        SwapBuffers();
-        PrepareLightList(vp);
-        RenderLightsToFrontBuffer();
+        const auto lightBits = RenderLightMap(vp, rt);
 
-        uint8_t* lightBits = static_cast<uint8_t*>(GetFrontBuffer());
-        if (lightBits == nullptr)
-        {
-            return;
-        }
-
-        for (uint32_t y = 0; y < height; y++)
+        for (int32_t y = 0; y < rt.height; y++)
         {
             uintptr_t dstOffset = static_cast<uintptr_t>(y * dstPitch);
             uint32_t* dst = reinterpret_cast<uint32_t*>(reinterpret_cast<uintptr_t>(dstPixels) + dstOffset);
-            for (uint32_t x = 0; x < width; x++)
+            for (int32_t x = 0; x < rt.width; x++)
             {
-                PaletteIndex src = bits[y * width + x];
+                PaletteIndex src = rt.bits[y * rt.LineStride() + x];
                 uint32_t darkColour = palette[EnumValue(src)];
                 uint32_t lightColour = lightPalette[EnumValue(src)];
-                uint8_t lightIntensity = lightBits[y * width + x];
+                uint8_t lightIntensity = lightBits[static_cast<size_t>(y) * rt.width + x];
 
                 uint32_t colour = 0;
                 if (lightIntensity == 0)
