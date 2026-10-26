@@ -46,17 +46,49 @@ namespace OpenRCT2
         return stateText;
     }
 
-    std::string GuestDecisionSnapshot::prompt(bool omitIncumbentHints) const
+    std::string GuestDecisionSnapshot::anonymousFeatures() const
+    {
+        const auto source = json_t::parse(stateJson(true));
+        json_t features = { { "state", json_t::object() }, { "options", json_t::array() } };
+        for (const auto* key : { "happiness", "energy", "hunger", "thirst", "nausea", "toilet", "activity",
+                                 "carrying_food_or_drink", "current_needs", "cash_raw_tenths", "preferred_intensity_min",
+                                 "preferred_intensity_max", "nausea_tolerance_0_to_3" })
+            if (source.contains(key))
+                features["state"][key] = source[key];
+        for (const auto& candidate : candidates)
+        {
+            const auto sourceOption = json_t::parse(candidate.description);
+            json_t option = json_t::object();
+            for (const auto* key :
+                 { "goal", "distance_tiles", "price_raw_tenths", "queue_guests", "excitement", "intensity", "nausea" })
+                if (sourceOption.contains(key))
+                    option[key] = sourceOption[key];
+            const auto goal = option.value("goal", "");
+            if (goal != "ride" && goal != "food" && goal != "drink" && goal != "toilet" && goal != "first_aid"
+                && goal != "cash_machine")
+                throw std::runtime_error("Invalid anonymous decision goal.");
+            for (auto it = option.begin(); it != option.end(); ++it)
+                if (it.key() != "goal" && (!it->is_number() || !std::isfinite(it->get<double>()) || it->get<double>() < 0))
+                    throw std::runtime_error("Invalid anonymous decision attribute.");
+            features["options"].push_back(std::move(option));
+        }
+        return features.dump();
+    }
+
+    std::string GuestDecisionSnapshot::prompt(bool omitIncumbentHints, bool anonymousChoices) const
     {
         if (candidates.size() < 2 || candidates.size() > kGuestDecisionMaxCandidates)
             throw std::runtime_error("Guest decisions require between 2 and 8 options.");
-        std::string user = "State:\n" + stateJson(omitIncumbentHints)
+        const auto anonymous = anonymousChoices ? json_t::parse(anonymousFeatures()) : json_t();
+        std::string user = "State:\n" + (anonymousChoices ? anonymous["state"].dump() : stateJson(omitIncumbentHints))
             + "\n\nQuestion:\nChoose the next destination for this theme park guest. "
               "Prioritise current physiological needs, then appealing rides, short queues and walking distance.\n\nOptions:\n";
         for (size_t i = 0; i < candidates.size(); ++i)
         {
             auto description = candidates[i].description;
-            if (omitIncumbentHints)
+            if (anonymousChoices)
+                description = anonymous["options"][i].dump();
+            else if (omitIncumbentHints)
             {
                 auto attributes = json_t::parse(description);
                 attributes.erase("already_heading_here");
@@ -67,7 +99,7 @@ namespace OpenRCT2
                 if (static_cast<unsigned char>(c) < 32 || c == '<' || c == '>')
                     c = ' ';
             user += static_cast<char>('A' + i);
-            user += ": ride_" + std::to_string(candidates[i].rideId) + ": " + description + "\n";
+            user += (anonymousChoices ? ": " : ": ride_" + std::to_string(candidates[i].rideId) + ": ") + description + "\n";
         }
         user += "\nReply with only the code of the best option.";
         return "<|im_start|>system\n"

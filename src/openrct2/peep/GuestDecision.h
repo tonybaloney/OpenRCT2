@@ -37,7 +37,8 @@ namespace OpenRCT2
         uint8_t minimumIntensity{}, maximumIntensity{}, nauseaTolerance{};
         std::vector<GuestDecisionCandidate> candidates;
 
-        std::string prompt(bool omitIncumbentHints = false) const;
+        std::string prompt(bool omitIncumbentHints = false, bool anonymousChoices = false) const;
+        std::string anonymousFeatures() const;
         std::string stateJson(bool omitIncumbentHints = false) const;
         std::string freshnessKey() const;
     };

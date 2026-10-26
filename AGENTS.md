@@ -150,6 +150,55 @@ title/editor, multiplayer or replay modes. Invalid narration restores native
 thoughts, and generated prose can still invent details despite lexical checks.
 Do not use output quality as a substitute for checking actual guest state.
 
+## Offline neutral-anonymous dataset
+
+On `dataset/d3-lite-neutral-anonymous`, build `tests.exe` before collection:
+
+```powershell
+node --test .\test\tests\d3-dataset.test.mjs
+node .\scripts\produce-d3-dataset.mjs --output .\bin\d3-dataset-local
+node .\scripts\audit-d3-dataset.mjs .\bin\d3-dataset-local
+```
+
+Use `--config` for a separate frozen JSON configuration. The default is a capped
+500-case pilot, not a promise of 5,000 retained groups. It uses four independent
+headless workers, fresh process/profile per action, full native/candidate
+continuations at 3,200/9,600/24,000 ticks, two matched initial RNG replicas,
+an uninterrupted source-world probe, and exact native replay. Whole-park rollouts
+are expensive. The one-hour dispatch deadline lets in-progress groups finish;
+branch and disk caps also apply. Do not rebuild/replace `tests.exe` while
+collection is running. Resume only with identical config, executable and assets.
+
+Simulation collection needs original RCT2 objects but no inference. Final exact
+token validation uses installed D3-Lite's vocabulary and the pinned native DLL,
+via Python's standard library; no weights, GPU inference, trainer, downloads or
+third-party Python packages are used. Node.js orchestrates capture and export.
+
+`neutral-anonymous-v1` is a new, explicit future inference contract, not the old
+B prompt: codes A-H have generic attributes, without persistent IDs, names,
+coordinates or incumbent hints. Existing gameplay prompts/gates are unchanged.
+The dataset targets D3's 255-code classifier readout, not chat/SFT completions.
+Dataset-only preview/validation guards preserve RNG, including rain/umbrella
+eligibility peeks. Registry spatial lookup vectors and normal post-load caches
+are rebuilt; whole-world/source-continuation checks reject restoration errors.
+Keep metadata and audit mappings out of input text. Censored initial journeys
+do not receive action labels; later unrelated native rides do not censor an
+already resolved initial journey. Observed departures use an explicit zero-utility
+tail through the fixed horizon; unknown removal/slot reuse remains censored.
+Measured near-tie/RNG disagreement stays soft.
+No offered improvement over native means no supervised destination target.
+Use `evaluation-*.jsonl` (including non-improving/censored cases) for later
+selective-policy evaluation, not just the selected supervised JSONL.
+
+Read `DATASET-CARD.md`, `manifest.json`, contracts and `coverage.json` before use.
+Labels are provisional/automatic/unreviewed, Blackpool-only, and not evidence
+of cross-park generalization or improved model confidence. Calibration/test
+partitions are locked; human review exposes train/development only. Review
+records must not be represented as completed until actually annotated.
+`package-d3-dataset.ps1` packages JSON evidence/source without checkpoints,
+original assets, models, profiles or binaries. Local `.park` checkpoints and
+object dependency hashes remain under ignored `bin` for replay.
+
 ## Focused checks and invariants
 
 Run tests with `bin` as the working directory:

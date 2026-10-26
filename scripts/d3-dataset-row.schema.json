@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "D3 neutral-anonymous classifier row",
+  "type": "object",
+  "required": [
+    "schema", "id", "group_id", "split", "prompt", "prompt_sha256",
+    "feature_sha256", "valid_codes", "valid_code_indices", "valid_code_mask_255",
+    "code_to_local_option", "target_distribution", "acceptable_codes", "hard_target_code",
+    "utilities", "native_relative_advantage", "label_status", "review_status",
+    "sample_weight", "sampling_weight", "augmentation_index", "token_count", "token_ids_sha256"
+  ],
+  "properties": {
+    "schema": { "const": "neutral-anonymous-v1" },
+    "id": { "type": "string", "pattern": "^[a-f0-9]{24}-[0-2]$" },
+    "group_id": { "type": "string", "pattern": "^[a-f0-9]{24}$" },
+    "split": { "enum": ["train", "development", "calibration", "test"] },
+    "prompt": { "type": "string", "minLength": 1 },
+    "prompt_sha256": { "$ref": "#/$defs/hash" },
+    "feature_sha256": { "$ref": "#/$defs/hash" },
+    "valid_codes": { "type": "array", "minItems": 2, "maxItems": 8, "uniqueItems": true, "items": { "$ref": "#/$defs/code" } },
+    "valid_code_indices": { "type": "array", "minItems": 2, "maxItems": 8, "uniqueItems": true, "items": { "type": "integer", "minimum": 0, "maximum": 7 } },
+    "valid_code_mask_255": { "type": "array", "minItems": 255, "maxItems": 255, "items": { "enum": [0, 1] } },
+    "code_to_local_option": { "type": "array", "minItems": 2, "maxItems": 8, "uniqueItems": true, "items": { "type": "integer", "minimum": 0, "maximum": 7 } },
+    "target_distribution": { "type": "array", "minItems": 2, "maxItems": 8, "items": { "type": "number", "minimum": 0, "maximum": 1 } },
+    "acceptable_codes": { "type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": { "$ref": "#/$defs/code" } },
+    "hard_target_code": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/code" }] },
+    "utilities": { "type": "array", "minItems": 2, "maxItems": 8, "items": { "type": "number", "minimum": 0, "maximum": 1 } },
+    "native_relative_advantage": { "type": "number", "minimum": -1, "maximum": 1 },
+    "label_status": { "enum": ["clear", "ambiguous"] },
+    "review_status": { "const": "automatic-unreviewed" },
+    "sample_weight": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+    "sampling_weight": { "type": "number", "exclusiveMinimum": 0 },
+    "augmentation_index": { "type": "integer", "minimum": 0, "maximum": 2 },
+    "token_count": { "type": "integer", "minimum": 1, "maximum": 1536 },
+    "token_ids_sha256": { "$ref": "#/$defs/hash" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "code": { "enum": ["A", "B", "C", "D", "E", "F", "G", "H"] }
+  },
+  "$comment": "Semantic checks additionally enforce matching choice/label lengths, normalized targets, code-mask alignment, exact engine prompt roundtrip, pinned token counts and split isolation."
+}

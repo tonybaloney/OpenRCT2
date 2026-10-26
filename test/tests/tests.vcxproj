@@ -92,6 +92,7 @@
     <ClCompile Include="GuestNarrativeTests.cpp" />
     <ClCompile Include="GuestDecisionTests.cpp" />
     <ClCompile Include="GuestDecisionExperiment.cpp" />
+    <ClCompile Include="GuestDecisionDataset.cpp" />
     <ClCompile Include="GuestThoughtServiceTests.cpp" />
     <ClCompile Include="GuestThoughtModelTests.cpp" />
     <ClCompile Include="..\..\src\openrct2-ui\guest\LlamaGuestThoughtBackend.cpp" Condition="'$(EnableGuestThoughts)'=='true'" />

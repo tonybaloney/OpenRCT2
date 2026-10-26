@@ -181,6 +181,43 @@ TEST(GuestDecision, IncumbentNeutralPromptRemovesHintsWithoutChangingChoicesOrFr
     EXPECT_EQ(trace["minimum_margin"], 0.08);
 }
 
+TEST(GuestDecision, AnonymousPromptHasOnlyGenericFeaturesAndQuestionLocalCodes)
+{
+    auto snapshot = Snapshot();
+    snapshot.heading = 1;
+    snapshot.guest.ride = "Blackpool secret ride";
+    snapshot.candidates[0] = {
+        1,
+        R"({"goal":"ride","distance_tiles":12,"queue_guests":3,"already_heading_here":true,"name":"Secret","park":"Blackpool"})",
+        "Secret"
+    };
+    snapshot.candidates[1] = { 2, R"({"goal":"food","distance_tiles":34,"price_raw_tenths":20,"already_heading_here":false})",
+                               "Shop" };
+    const auto prompt = snapshot.prompt(true, true);
+    EXPECT_EQ(prompt.find("ride_"), std::string::npos);
+    EXPECT_EQ(prompt.find("Secret"), std::string::npos);
+    EXPECT_EQ(prompt.find("Blackpool"), std::string::npos);
+    EXPECT_EQ(prompt.find("current_ride"), std::string::npos);
+    EXPECT_EQ(prompt.find("already_heading_here"), std::string::npos);
+    EXPECT_NE(prompt.find("A: {"), std::string::npos);
+    EXPECT_NE(prompt.find("B: {"), std::string::npos);
+    snapshot.heading = 77;
+    snapshot.guest.guestId = 12345;
+    snapshot.guest.ride = "Another name";
+    snapshot.candidates[0].rideId = 77;
+    snapshot.candidates[1].rideId = 88;
+    snapshot.candidates[0].name = "Renamed";
+    EXPECT_EQ(snapshot.prompt(true, true), prompt);
+    const auto features = json_t::parse(snapshot.anonymousFeatures());
+    EXPECT_EQ(features["options"][0].size(), 3u);
+    std::reverse(snapshot.candidates.begin(), snapshot.candidates.end());
+    const auto reversed = json_t::parse(snapshot.anonymousFeatures());
+    EXPECT_EQ(reversed["options"][1], features["options"][0]);
+    EXPECT_EQ(reversed["state"], features["state"]);
+    snapshot.candidates[0].description = R"({"goal":"ride","distance_tiles":-1})";
+    EXPECT_THROW(snapshot.prompt(true, true), std::runtime_error);
+}
+
 TEST(GuestDecision, RejectsMalformedProbabilitiesAndDeclinesAmbiguousChoices)
 {
     EXPECT_EQ(SelectGuestDecision({ 0.1f, 0.9f }, 2), 1u);

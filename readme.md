@@ -386,6 +386,52 @@ asynchronous and repeated runs/seeds and longer horizons are needed for stronger
 
 ---
 
+## Provisional neutral-anonymous dataset
+
+The `dataset/d3-lite-neutral-anonymous` branch provides an opt-in offline
+counterfactual dataset pipeline for later D3-Lite adaptation. Its new
+`neutral-anonymous-v1` format removes persistent ride IDs as well as incumbent
+hints: only question-local codes and generic destination attributes reach the
+model. This is not an evaluation of the earlier B prompt, and ordinary gameplay
+is unchanged. Anonymous attributes can still fingerprint a ride statistically;
+Blackpool-only evidence does not establish transfer to other parks.
+
+Build ARM64 `tests.exe`, supply the usual original game objects, and run:
+
+```powershell
+node --test .\test\tests\d3-dataset.test.mjs
+node .\scripts\produce-d3-dataset.mjs --output .\bin\d3-dataset-local
+node .\scripts\audit-d3-dataset.mjs .\bin\d3-dataset-local
+```
+
+The default frozen `scripts\d3-dataset-config.json` captures up to 500 groups
+from disjoint focal-guest/seed-family partitions, then evaluates the native
+continuation and every offered intervention in fresh processes/profiles using two matched initial RNG
+replicas and 3,200/9,600/24,000-tick horizons. All nonauthoring save chunks must
+survive restore exactly; native replay must match before labeling. Collection
+is bounded by branch/disk caps and a one-hour dispatch deadline; in-progress
+groups finish. Actual retained groups, not augmented rows, determine dataset
+size. A later 5,000-group target is not claimed achieved by a capped pilot.
+Do not rebuild while the collector is running.
+
+Rewards use integrated needs/happiness and measured walking/queue ticks, not
+old model confidence or native choices as ground truth. Unresolved initial
+journeys and unexplained guest removal censor labels. Observed departure is an
+explicit absorbing terminal outcome with zero remaining utility through the
+fixed horizon, not a reward for missing follow-up. Near ties and replica
+disagreement retain soft targets, and native-relative advantage is separate.
+The classifier exports offered-code masks/targets, not generated rationales.
+Exact budget checks use the installed pinned D3-Lite vocabulary without loading
+weights, using Python's standard library; no training environment is installed.
+See `AGENTS.md` for prerequisites and `--config`/resume guidance.
+
+Output includes split JSONL, raw audit evidence, exclusions, contracts,
+coverage/shortcut diagnostics, a train/development-only blinded review queue
+and a dataset card. All automatic labels remain explicitly unreviewed.
+Calibration/test must not be used to tune reward weights or select models.
+Only the row's `prompt` is model input; audit IDs and metadata are never text
+features. No training, threshold adjustment or deployment is performed.
+
 # 4. Contributing
 OpenRCT2 uses the [gitflow workflow](https://www.atlassian.com/git/tutorials/comparing-workflows#gitflow-workflow). If you are implementing a new feature or fixing a bug, please branch off and perform pull requests to ```develop```. ```master``` only contains tagged releases, you should never branch off this.
 
