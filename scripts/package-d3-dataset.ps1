@@ -20,6 +20,8 @@ $pinnedSources = @{
     replay_harness = 'test\tests\GuestDecisionDataset.cpp'
     utility_rng_source = 'src\openrct2\util\Util.cpp'
     utility_rng_header = 'src\openrct2\util\Util.h'
+    map_animation_source = 'src\openrct2\world\MapAnimation.cpp'
+    map_animation_header = 'src\openrct2\world\MapAnimation.h'
     exporter = 'scripts\produce-d3-dataset.mjs'
     labeler = 'scripts\d3-dataset.mjs'
     tokenizer_helper = 'scripts\tokenize-d3-dataset.py'
@@ -61,7 +63,8 @@ $sourceFiles = @(
     'test\tests\GuestDecisionDataset.cpp', 'test\tests\GuestDecisionTests.cpp',
     'test\tests\tests.vcxproj', 'test\tests\CMakeLists.txt',
     'src\openrct2\peep\GuestDecision.cpp', 'src\openrct2\peep\GuestDecision.h',
-    'src\openrct2\util\Util.cpp', 'src\openrct2\util\Util.h'
+    'src\openrct2\util\Util.cpp', 'src\openrct2\util\Util.h',
+    'src\openrct2\world\MapAnimation.cpp', 'src\openrct2\world\MapAnimation.h'
 )
 foreach ($relative in $sourceFiles) {
     $to = Join-Path $target (Join-Path 'source' $relative)
@@ -78,6 +81,7 @@ $checkpoints = $checkpointIndex | Group-Object checkpoint_sha256 | ForEach-Objec
         local_path = $entry.checkpoint
         world = $entry.world
         utility_rng_state = $entry.utility_rng_state
+        map_update_queues = $entry.map_update_queues
     }
 }
 $replayManifest = [ordered]@{

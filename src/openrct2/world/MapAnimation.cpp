@@ -71,6 +71,24 @@ static std::set<TileCoordsXY, TileCoordsXYCmp> _mapAnimationsUpdate;
 
 static std::set<TemporaryMapAnimation> _temporaryMapAnimations;
 
+MapAnimations::UpdateState MapAnimations::CaptureUpdateState()
+{
+    UpdateState state;
+    state.tiles.assign(_mapAnimationsUpdate.begin(), _mapAnimationsUpdate.end());
+    for (const auto& animation : _temporaryMapAnimations)
+        state.temporary.emplace_back(animation.location, animation.type);
+    return state;
+}
+
+void MapAnimations::RestoreUpdateState(const UpdateState& state)
+{
+    _mapAnimationsUpdate.clear();
+    _mapAnimationsUpdate.insert(state.tiles.begin(), state.tiles.end());
+    _temporaryMapAnimations.clear();
+    for (const auto& [location, type] : state.temporary)
+        _temporaryMapAnimations.insert(TemporaryMapAnimation{ location, type });
+}
+
 template<bool invalidateAllViewports>
 static void Invalidate(
     const Viewport* const viewport, const int32_t x, const int32_t y, const int32_t z0, const int32_t z1,

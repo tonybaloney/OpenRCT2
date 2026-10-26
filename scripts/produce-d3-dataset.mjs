@@ -83,6 +83,8 @@ async function main() {
         replay_harness: await fileHash(path.join(root, 'test', 'tests', 'GuestDecisionDataset.cpp')),
         utility_rng_source: await fileHash(path.join(root, 'src', 'openrct2', 'util', 'Util.cpp')),
         utility_rng_header: await fileHash(path.join(root, 'src', 'openrct2', 'util', 'Util.h')),
+        map_animation_source: await fileHash(path.join(root, 'src', 'openrct2', 'world', 'MapAnimation.cpp')),
+        map_animation_header: await fileHash(path.join(root, 'src', 'openrct2', 'world', 'MapAnimation.h')),
         exporter: await fileHash(path.join(root, 'scripts', 'produce-d3-dataset.mjs')),
         labeler: await fileHash(path.join(root, 'scripts', 'd3-dataset.mjs')),
         tokenizer_helper: await fileHash(path.join(root, 'scripts', 'tokenize-d3-dataset.py')),
@@ -99,7 +101,8 @@ async function main() {
         base_commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
         source_branch: execFileSync('git', ['branch', '--show-current'], { cwd: root, encoding: 'utf8' }).trim(),
         compiled_source_hashes: { engine: hashes.engine_source, harness: hashes.replay_harness,
-            utility_rng: hashes.utility_rng_source, utility_rng_header: hashes.utility_rng_header },
+            utility_rng: hashes.utility_rng_source, utility_rng_header: hashes.utility_rng_header,
+            map_animation: hashes.map_animation_source, map_animation_header: hashes.map_animation_header },
         executable_sha256: hashes.tests_executable,
         note: 'The executable/hash pair and exact source files are retained. The final package replay manifest records the published source commit.',
     });
@@ -407,7 +410,7 @@ async function main() {
         test_locked: true, human_reviews_completed: 0, training_performed: false,
         gates_changed: false, identity_invariance_passed: true, source_prompt_roundtrip_passed: true,
         partition_guest_lineage_check_passed: true,
-        checkpoint_policy: 'All nonauthoring park chunks and the utility RNG fingerprinted. Authoring chunk 1 alone excluded for wall-clock timestamps. Uninterrupted 256-tick source probe matches restored and cold-native replay. Each branch runs in a fresh process/profile. Full native continuation repeated and compared in full.',
+        checkpoint_policy: 'All nonauthoring park chunks, utility RNG and state-changing map update queues fingerprinted. Authoring chunk 1 alone excluded for wall-clock timestamps. Uninterrupted 256-tick source probe matches restored and cold-native replay. Each branch runs in a fresh process/profile. Full native continuation repeated and compared in full.',
         limitations: [
             'Blackpool-only. No cross-park generalization claim; attributes can still fingerprint rides statistically.',
             'Seeded descendants of one public starting park. Focal guest partitions are disjoint, background guests and physical destinations overlap.',

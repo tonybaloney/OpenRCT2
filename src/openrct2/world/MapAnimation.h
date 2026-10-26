@@ -9,7 +9,11 @@
 
 #pragma once
 
+#include "Location.hpp"
+
 #include <cstdint>
+#include <utility>
+#include <vector>
 
 struct CoordsXYZ;
 struct TileCoordsXY;
@@ -21,6 +25,15 @@ namespace OpenRCT2::MapAnimations
         onRidePhoto,
         landEdgeDoor,
     };
+
+    struct UpdateState
+    {
+        std::vector<TileCoordsXY> tiles;
+        std::vector<std::pair<CoordsXYZ, TemporaryType>> temporary;
+    };
+
+    UpdateState CaptureUpdateState();
+    void RestoreUpdateState(const UpdateState& state);
 
     void MarkTileForInvalidation(TileCoordsXY coords);
     void MarkTileForUpdate(TileCoordsXY coords);

@@ -183,6 +183,8 @@ eligibility peeks. Registry spatial lookup vectors and normal post-load caches
 are rebuilt; whole-world/source-continuation checks reject restoration errors.
 The separate utility RNG (used by ride music) is seeded and captured/restored
 in audit sidecars too; no ride chunks are ignored to hide tune differences.
+Sidecars also preserve state-changing map update queues, including temporary
+on-ride-photo countdowns and land-edge doors, which park files do not store.
 Keep metadata and audit mappings out of input text. Censored initial journeys
 do not receive action labels; later unrelated native rides do not censor an
 already resolved initial journey. Observed departures use an explicit zero-utility

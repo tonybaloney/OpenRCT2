@@ -14,6 +14,8 @@ const guests = new Map();
 for (const entry of cases) {
     assert.equal(render(entry), entry.prompt);
     assert.equal(sha(entry.utility_rng_state), entry.world.utility_rng, 'Missing/mismatched utility RNG checkpoint');
+    assert.equal(sha(JSON.stringify(entry.map_update_queues)), entry.world.map_update_queues,
+        'Missing/mismatched map update queues');
     assert(!guests.has(entry.guest_id) || guests.get(entry.guest_id) === entry.split);
     guests.set(entry.guest_id, entry.split);
 }

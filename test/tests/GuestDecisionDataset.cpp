@@ -15,6 +15,7 @@
 #include <openrct2/Context.h>
 #include <openrct2/Game.h>
 #include <openrct2/GameState.h>
+#include <openrct2/GameStateSnapshots.h>
 #include <openrct2/OpenRCT2.h>
 #include <openrct2/ParkImporter.h>
 #include <openrct2/config/Config.h>
@@ -32,8 +33,6 @@
 #include <openrct2/park/ParkFile.h>
 #include <openrct2/peep/GuestDecision.h>
 #include <openrct2/platform/Platform.h>
-#include <openrct2/ride/Ride.h>
-#include <openrct2/ride/RideManager.hpp>
 #include <openrct2/scenario/Scenario.h>
 #include <openrct2/scenes/SceneManager.h>
 #include <openrct2/util/Util.h>
@@ -73,6 +72,17 @@ namespace
         return stream.str();
     }
 
+    json_t AnimationState()
+    {
+        const auto state = MapAnimations::CaptureUpdateState();
+        json_t result = { { "tiles", json_t::array() }, { "temporary", json_t::array() } };
+        for (const auto& tile : state.tiles)
+            result["tiles"].push_back({ tile.x, tile.y });
+        for (const auto& [location, type] : state.temporary)
+            result["temporary"].push_back({ location.x, location.y, location.z, static_cast<uint8_t>(type) });
+        return result;
+    }
+
     json_t WorldFingerprint()
     {
         auto save = Save();
@@ -87,7 +97,9 @@ namespace
         if (64ULL + 20ULL * count > save.GetLength())
             throw std::runtime_error("Invalid uncompressed checkpoint table.");
         const auto utility = UtilityState();
-        json_t result = { { "utility_rng", Digest(utility.data(), utility.size()) } };
+        const auto animations = AnimationState().dump();
+        json_t result = { { "utility_rng", Digest(utility.data(), utility.size()) },
+                          { "map_update_queues", Digest(animations.data(), animations.size()) } };
         for (uint32_t i = 0; i < count; ++i)
         {
             uint32_t id{};
@@ -105,7 +117,7 @@ namespace
         return result;
     }
 
-    void Restore(MemoryStream& stream, IContext& context, const std::string& utilityState)
+    void Restore(MemoryStream& stream, IContext& context, const std::string& utilityState, const json_t& animations)
     {
         ShutdownGuestDecisions();
         stream.SetPosition(0);
@@ -121,6 +133,19 @@ namespace
         Drawing::LoadPalette();
         EntityTweener::get().reset();
         MapAnimations::MarkAllTiles();
+        MapAnimations::UpdateState updates;
+        for (const auto& tile : animations.at("tiles"))
+            updates.tiles.emplace_back(tile.at(0).get<int32_t>(), tile.at(1).get<int32_t>());
+        for (const auto& animation : animations.at("temporary"))
+        {
+            const auto type = animation.at(3).get<uint8_t>();
+            if (type > static_cast<uint8_t>(MapAnimations::TemporaryType::landEdgeDoor))
+                throw std::runtime_error("Invalid checkpoint temporary animation type.");
+            updates.temporary.emplace_back(
+                CoordsXYZ{ animation.at(0).get<int32_t>(), animation.at(1).get<int32_t>(), animation.at(2).get<int32_t>() },
+                static_cast<MapAnimations::TemporaryType>(type));
+        }
+        MapAnimations::RestoreUpdateState(updates);
         gGameSpeed = 1;
         std::istringstream utility(utilityState);
         utility >> GetUtilRandomEngine();
@@ -140,15 +165,6 @@ namespace
     {
         auto* guest = getGameState().entities.getEntity<Guest>(EntityId::FromUnderlying(entity));
         return guest && guest->peepId == identity ? guest : nullptr;
-    }
-
-    json_t RideAudioState()
-    {
-        auto result = json_t::object();
-        for (const auto& ride : RideManager(getGameState()))
-            result[std::to_string(ride.id.ToUnderlying())] = { { "tune", ride.musicTuneId },
-                                                               { "position", ride.musicPosition } };
-        return result;
     }
 
     struct PreviewRng
@@ -393,6 +409,21 @@ TEST(GuestDecisionDataset, UtilityRandomEngineRestoresExactly)
     GetUtilRandomEngine() = original;
 }
 
+TEST(GuestDecisionDataset, MapUpdateQueuesRestoreExactly)
+{
+    const auto original = MapAnimations::CaptureUpdateState();
+    const auto before = AnimationState();
+    MapAnimations::UpdateState state;
+    state.tiles.emplace_back(4, 5);
+    state.temporary.emplace_back(CoordsXYZ{ 128, 160, 16 }, MapAnimations::TemporaryType::onRidePhoto);
+    MapAnimations::RestoreUpdateState(state);
+    const auto restored = AnimationState();
+    EXPECT_EQ(restored["tiles"], json_t::array({ { 4, 5 } }));
+    EXPECT_EQ(restored["temporary"], json_t::array({ { 128, 160, 16, 0 } }));
+    MapAnimations::RestoreUpdateState(original);
+    EXPECT_EQ(AnimationState(), before);
+}
+
 TEST(GuestDecisionDataset, DISABLED_Offline)
 {
     const auto configPath = Platform::GetEnvironmentVariable("OPENRCT2_D3_DATASET_CONFIG");
@@ -479,28 +510,38 @@ TEST(GuestDecisionDataset, DISABLED_Offline)
                 continue;
             auto checkpoint = Save();
             const auto utilityState = UtilityState();
+            const auto animationState = AnimationState();
             const auto fingerprint = WorldFingerprint();
             constexpr uint32_t probeTicks = 256;
             for (uint32_t i = 0; i < probeTicks; ++i)
                 gameStateUpdateLogic();
             const auto uninterrupted = WorldFingerprint();
-            const auto uninterruptedAudio = RideAudioState();
-            Restore(checkpoint, *context, utilityState);
+            auto uninterruptedSave = Save();
+            auto snapshots = CreateGameStateSnapshots();
+            auto& uninterruptedEntities = snapshots->CreateSnapshot();
+            snapshots->Capture(uninterruptedEntities);
+            Restore(checkpoint, *context, utilityState, animationState);
             ASSERT_EQ(WorldFingerprint(), fingerprint);
             for (uint32_t i = 0; i < probeTicks; ++i)
                 gameStateUpdateLogic();
             const auto replayed = WorldFingerprint();
             if (replayed != uninterrupted)
             {
+                auto restoredSave = Save();
+                std::ofstream sourceFile(output / "uninterrupted-diagnostic.park", std::ios::binary);
+                sourceFile.write(static_cast<const char*>(uninterruptedSave.GetData()), uninterruptedSave.GetLength());
+                std::ofstream restoredFile(output / "restored-diagnostic.park", std::ios::binary);
+                restoredFile.write(static_cast<const char*>(restoredSave.GetData()), restoredSave.GetLength());
+                auto& replayedEntities = snapshots->CreateSnapshot();
+                snapshots->Capture(replayedEntities);
+                snapshots->LogCompareDataToFile(
+                    (output / "entity-replay-diff.txt").string(), snapshots->Compare(uninterruptedEntities, replayedEntities));
                 WriteJson(
                     output / "uninterrupted-replay-mismatch.json",
-                    { { "uninterrupted", uninterrupted },
-                      { "restored", replayed },
-                      { "uninterrupted_audio", uninterruptedAudio },
-                      { "restored_audio", RideAudioState() } });
+                    { { "uninterrupted", uninterrupted }, { "restored", replayed } });
                 FAIL() << "Restored native continuation differs from the uninterrupted capture world.";
             }
-            Restore(checkpoint, *context, utilityState);
+            Restore(checkpoint, *context, utilityState, animationState);
             ASSERT_EQ(WorldFingerprint(), fingerprint);
             const auto hash = Digest(checkpoint.GetData(), checkpoint.GetLength());
             const auto file = output / (hash + ".park");
@@ -528,6 +569,7 @@ TEST(GuestDecisionDataset, DISABLED_Offline)
                       { "checkpoint", file.string() },
                       { "checkpoint_sha256", hash },
                       { "utility_rng_state", utilityState },
+                      { "map_update_queues", animationState },
                       { "world", fingerprint },
                       { "uninterrupted_probe", { { "ticks", probeTicks }, { "world", uninterrupted }, { "matched", true } } },
                       { "tick", snapshot.tick },
@@ -557,7 +599,7 @@ TEST(GuestDecisionDataset, DISABLED_Offline)
         std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
         ASSERT_EQ(Digest(bytes.data(), bytes.size()), entry.at("checkpoint_sha256").get<std::string>());
         MemoryStream checkpoint(bytes);
-        Restore(checkpoint, *context, entry.at("utility_rng_state").get<std::string>());
+        Restore(checkpoint, *context, entry.at("utility_rng_state").get<std::string>(), entry.at("map_update_queues"));
         const auto restored = WorldFingerprint();
         if (restored != entry.at("world"))
         {
