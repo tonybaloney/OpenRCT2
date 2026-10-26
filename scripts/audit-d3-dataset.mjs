@@ -7,6 +7,51 @@ import { canonical, fingerprint, label, render, sha, splits, trainingRow } from 
 const directory = path.resolve(process.argv[2] || '');
 const read = async file => JSON.parse(await fs.readFile(path.join(directory, file), 'utf8'));
 const manifest = await read('manifest.json');
+const rowSchema = JSON.parse(await fs.readFile(new URL('./d3-dataset-row.schema.json', import.meta.url), 'utf8'));
+const schemaKeywords = new Set(['$schema', '$defs', '$comment', 'title', '$ref', 'anyOf', 'const', 'enum', 'type',
+    'minimum', 'maximum', 'exclusiveMinimum', 'minLength', 'pattern', 'minItems', 'maxItems', 'uniqueItems',
+    'items', 'required', 'additionalProperties', 'properties']);
+function validateShape(value, rule) {
+    for (const key of Object.keys(rule)) assert(schemaKeywords.has(key), `Unsupported row-schema keyword ${key}`);
+    if (rule.$ref) {
+        assert.equal(Object.keys(rule).length, 1, 'Unsupported schema reference siblings');
+        assert(rule.$ref.startsWith('#/$defs/'));
+        return validateShape(value, rowSchema.$defs[rule.$ref.split('/').at(-1)]);
+    }
+    if (rule.anyOf) {
+        assert(rule.anyOf.some(candidate => {
+            try { validateShape(value, candidate); return true; } catch { return false; }
+        }), 'Formal schema alternative mismatch');
+    }
+    if ('const' in rule) assert.deepEqual(value, rule.const);
+    if (rule.enum) assert(rule.enum.includes(value), 'Formal schema enum mismatch');
+    if (rule.type) {
+        const type = value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+        assert(rule.type === 'integer' ? Number.isInteger(value) : type === rule.type, 'Formal schema type mismatch');
+    }
+    if (typeof value === 'number') {
+        assert(Number.isFinite(value), 'Nonfinite schema number');
+        if ('minimum' in rule) assert(value >= rule.minimum, 'Formal schema minimum');
+        if ('maximum' in rule) assert(value <= rule.maximum, 'Formal schema maximum');
+        if ('exclusiveMinimum' in rule) assert(value > rule.exclusiveMinimum, 'Formal schema exclusive minimum');
+    }
+    if (typeof value === 'string') {
+        if (rule.minLength) assert([...value].length >= rule.minLength);
+        if (rule.pattern) assert(new RegExp(rule.pattern).test(value), 'Formal schema pattern mismatch');
+    }
+    if (Array.isArray(value)) {
+        if (rule.minItems) assert(value.length >= rule.minItems);
+        if (rule.maxItems) assert(value.length <= rule.maxItems);
+        if (rule.uniqueItems) assert.equal(new Set(value.map(canonical)).size, value.length);
+        if (rule.items) for (const item of value) validateShape(item, rule.items);
+    } else if (value !== null && typeof value === 'object') {
+        for (const key of rule.required || []) assert(Object.hasOwn(value, key), `Missing schema field ${key}`);
+        for (const [key, item] of Object.entries(value)) {
+            if (rule.additionalProperties === false) assert(Object.hasOwn(rule.properties, key), `Extra schema field ${key}`);
+            if (rule.properties?.[key]) validateShape(item, rule.properties[key]);
+        }
+    }
+}
 const cases = await read(path.join('audit', 'case-index.json'));
 const index = new Map(cases.map(entry => [entry.case_id, entry]));
 assert.equal(index.size, cases.length);
@@ -112,6 +157,7 @@ for (const split of splits) {
         .filter(Boolean).map(line => JSON.parse(line));
     rowsBySplit[split] = rows.length;
     for (const row of rows) {
+        validateShape(row, rowSchema);
         assert(!seenIds.has(row.id), 'Duplicate row ID');
         seenIds.add(row.id);
         assert.equal(row.split, split);
@@ -147,7 +193,7 @@ for (const split of splits) {
 const reviews = await read(path.join('review', 'queue.json'));
 for (const review of reviews) {
     assert(['train', 'development'].includes(review.split));
-    assert.equal(review.annotation.action, null);
+    assert.deepEqual(review.annotation, { action: null, options: [], reason: '' });
     assert.equal(review.status, 'unreviewed');
     assert(!canonical(review).includes('incumbent_id'));
 }
@@ -158,6 +204,7 @@ assert.equal(manifest.training_performed, false);
 assert.equal(manifest.human_reviews_completed, 0);
 const result = { passed: true, rows: seenIds.size, groups: groupSplits.size, by_split: rowsBySplit,
     evaluation_groups: measuredEvidence.size, evaluation_by_split: evaluationBySplit,
+    formal_row_schema: true,
     raw_targets_recomputed: true, native_replay_evidence: true, invalid_measurements_excluded: true,
     exact_prompts: true, remapped_targets: true, identities_excluded: true,
     split_isolation: true, native_token_counts: true, reviews_unmodified: true };
