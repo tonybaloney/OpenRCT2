@@ -19,6 +19,7 @@
     #include "GLSLTypes.h"
     #include "OpenGLAPI.h"
     #include "OpenGLFramebuffer.h"
+    #include "SpriteSmoothing.h"
     #include "SwapFramebuffer.h"
     #include "TextureCache.h"
     #include "TransparencyDepth.h"
@@ -1017,6 +1018,9 @@ void OpenGLDrawingContext::DrawSprite(
     }
 
     const auto waterFlag = waterSurface ? DrawRectCommand::FLAG_WATER : 0;
+    const auto smoothingFlag = ShouldSmoothSprite(Config::Get().general.spriteSmoothing, rt.zoom_level, imageId)
+        ? DrawRectCommand::FLAG_SPRITE_SMOOTHING
+        : 0;
     if (special || imageId.IsBlended())
     {
         DrawRectCommand& command = _commandBuffers.transparent.allocate();
@@ -1030,7 +1034,7 @@ void OpenGLDrawingContext::DrawSprite(
         command.colour = palettes.x - (special ? 1 : 0);
         command.bounds = { left, top, right, bottom };
         command.flags = (special ? 0 : DrawRectCommand::FLAG_NO_TEXTURE | DrawRectCommand::FLAG_MASK)
-            | (waterFlag != 0 ? DrawRectCommand::FLAG_WATER_TRANSPARENT : 0);
+            | (waterFlag != 0 ? DrawRectCommand::FLAG_WATER_TRANSPARENT : 0) | smoothingFlag;
         command.depth = _drawCount++;
         command.zoom = zoom;
     }
@@ -1046,7 +1050,7 @@ void OpenGLDrawingContext::DrawSprite(
         command.palettes = palettes;
         command.colour = 0;
         command.bounds = { left, top, right, bottom };
-        command.flags = paletteCount | waterFlag;
+        command.flags = paletteCount | waterFlag | smoothingFlag;
         command.depth = _drawCount++;
         command.zoom = zoom;
     }

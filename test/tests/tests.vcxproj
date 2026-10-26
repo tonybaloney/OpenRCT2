@@ -109,6 +109,7 @@
     <ClCompile Include="TestData.cpp" />
     <ClCompile Include="tests.cpp" />
     <ClCompile Include="StringTest.cpp" />
+    <ClCompile Include="SpriteSmoothingTests.cpp" />
     <ClCompile Include="tests_pch.cpp" Condition="'$(UsePCH)'=='true'">
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>

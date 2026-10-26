@@ -3876,3 +3876,5 @@ STR_7082    :Weather atmosphere (OpenGL)
 STR_7083    :Add drifting mist and layered rain during precipitation. Requires OpenGL and weather effects; leaves interface windows unchanged
 STR_7084    :Water shimmer (OpenGL)
 STR_7085    :Add subtle animated highlights to visible water surfaces. Requires OpenGL; does not affect rides or interface windows
+STR_7086    :Sprite smoothing (OpenGL)
+STR_7087    :Use Scale2x on existing sprites when zoomed in. Requires OpenGL; keeps interface text crisp. Native and zoomed-out views are unchanged

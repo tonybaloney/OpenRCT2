@@ -264,6 +264,7 @@ namespace OpenRCT2::Config
             model->renderWeatherGloom = reader->GetBoolean("render_weather_gloom", true);
             model->weatherAtmosphere = reader->GetBoolean("weather_atmosphere", false);
             model->waterShimmer = reader->GetBoolean("water_shimmer", false);
+            model->spriteSmoothing = reader->GetBoolean("sprite_smoothing", false);
             model->showGuestPurchases = reader->GetBoolean("show_guest_purchases", false);
             model->showRealNamesOfGuests = reader->GetBoolean("show_real_names_of_guests", true);
             model->showRealNamesOfStaff = reader->GetBoolean("show_real_names_of_staff", false);
@@ -363,6 +364,7 @@ namespace OpenRCT2::Config
         writer->WriteBoolean("render_weather_gloom", model->renderWeatherGloom);
         writer->WriteBoolean("weather_atmosphere", model->weatherAtmosphere);
         writer->WriteBoolean("water_shimmer", model->waterShimmer);
+        writer->WriteBoolean("sprite_smoothing", model->spriteSmoothing);
         writer->WriteBoolean("show_guest_purchases", model->showGuestPurchases);
         writer->WriteBoolean("show_real_names_of_guests", model->showRealNamesOfGuests);
         writer->WriteBoolean("show_real_names_of_staff", model->showRealNamesOfStaff);

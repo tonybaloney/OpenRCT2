@@ -124,7 +124,8 @@ namespace OpenRCT2::Ui
             FLAG_WATER_TRANSPARENT = (1u << 7u),
             // bits 8 to 15 used to store hinting threshold.
             FLAG_TTF_HINTING_THRESHOLD_MASK = 0xff00,
-            FLAG_WATER_PRESERVE = (1u << 16u)
+            FLAG_WATER_PRESERVE = (1u << 16u),
+            FLAG_SPRITE_SMOOTHING = (1u << 17u)
         };
     };
 

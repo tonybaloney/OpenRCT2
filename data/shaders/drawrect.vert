@@ -32,6 +32,7 @@ flat out float fZoom;
 flat out int   fTexColourAtlas;
 flat out int   fTexMaskAtlas;
 flat out int   fScreenHeight;
+flat out ivec2 fSourceSize;
 // clang-format on
 
 void main()
@@ -45,6 +46,7 @@ void main()
 
     fPosition = vBounds.xy;
     fZoom = vZoom;
+    fSourceSize = ivec2(vec2(vBounds.zw - vBounds.xy) * vZoom);
     fTexColourAtlas = vTexColourAtlas;
     fTexMaskAtlas = vTexMaskAtlas;
 

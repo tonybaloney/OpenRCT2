@@ -9,6 +9,7 @@ const int FLAG_TTF_TEXT             = (1 << 5);
 const int FLAG_WATER                = (1 << 6);
 const int FLAG_WATER_TRANSPARENT    = (1 << 7);
 const int FLAG_WATER_PRESERVE       = (1 << 16);
+const int FLAG_SPRITE_SMOOTHING     = (1 << 17);
 
 uniform usampler2DArray uTexture;
 uniform usampler2D      uPaletteTex;
@@ -30,9 +31,36 @@ flat in float           fZoom;
 flat in int             fTexColourAtlas;
 flat in int             fTexMaskAtlas;
 flat in int             fScreenHeight;
+flat in ivec2           fSourceSize;
 // clang-format on
 
 out uint oColour;
+
+uint sourcePixel(ivec2 pixel, vec4 bounds, int atlas)
+{
+    // Clamp to this sprite, not the containing atlas (which also contains other sprites).
+    pixel = clamp(pixel, ivec2(0), fSourceSize - ivec2(1));
+    return texelFetch(uTexture, ivec3(ivec2(bounds.xy) + pixel, atlas), 0).r;
+}
+
+uint scale2x(vec2 position, vec4 bounds, int atlas)
+{
+    ivec2 pixel = ivec2(floor(position));
+    uint e = sourcePixel(pixel, bounds, atlas);
+    uint b = sourcePixel(pixel + ivec2(0, -1), bounds, atlas);
+    uint d = sourcePixel(pixel + ivec2(-1, 0), bounds, atlas);
+    uint f = sourcePixel(pixel + ivec2(1, 0), bounds, atlas);
+    uint h = sourcePixel(pixel + ivec2(0, 1), bounds, atlas);
+    if (b != h && d != f)
+    {
+        bvec2 quadrant = greaterThanEqual(fract(position), vec2(0.5));
+        uint horizontal = quadrant.x ? f : d;
+        uint vertical = quadrant.y ? h : b;
+        if (horizontal == vertical)
+            return horizontal;
+    }
+    return e;
+}
 
 void main()
 {
@@ -53,7 +81,9 @@ void main()
     {
         float colourU = (fTexColour.x + position.x) / fTexColour.z;
         float colourV = (fTexColour.y + position.y) / fTexColour.w;
-        texel = texture(uTexture, vec3(colourU, colourV, fTexColourAtlas)).r;
+        texel = ((fFlags & FLAG_SPRITE_SMOOTHING) != 0 && fZoom < 1.0 && (fFlags & FLAG_TTF_TEXT) == 0)
+            ? scale2x(position, fTexColour, fTexColourAtlas)
+            : texture(uTexture, vec3(colourU, colourV, fTexColourAtlas)).r;
         if (texel == 0u)
         {
             discard;
@@ -118,7 +148,9 @@ void main()
     {
         float maskU = (fTexMask.x + position.x) / fTexMask.z;
         float maskV = (fTexMask.y + position.y) / fTexMask.w;
-        uint mask = texture(uTexture, vec3(maskU, maskV, fTexMaskAtlas)).r;
+        uint mask = ((fFlags & FLAG_SPRITE_SMOOTHING) != 0 && fZoom < 1.0 && (fFlags & FLAG_TTF_TEXT) == 0)
+            ? scale2x(position, fTexMask, fTexMaskAtlas)
+            : texture(uTexture, vec3(maskU, maskV, fTexMaskAtlas)).r;
         if (mask == 0u)
         {
             discard;

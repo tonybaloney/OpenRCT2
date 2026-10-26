@@ -61,6 +61,7 @@ namespace OpenRCT2::Config
         bool renderWeatherGloom;
         bool weatherAtmosphere;
         bool waterShimmer;
+        bool spriteSmoothing;
         bool disableLightningEffect;
         bool showGuestPurchases;
         bool transparentScreenshot;
