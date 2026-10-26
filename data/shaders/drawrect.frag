@@ -56,7 +56,8 @@ uint scale2x(vec2 position, vec4 bounds, int atlas)
         bvec2 quadrant = greaterThanEqual(fract(position), vec2(0.5));
         uint horizontal = quadrant.x ? f : d;
         uint vertical = quadrant.y ? h : b;
-        if (horizontal == vertical)
+        // Independently assembled tiles must keep their original coverage, including mask-only water draws.
+        if (horizontal == vertical && (horizontal == 0u) == (e == 0u))
             return horizontal;
     }
     return e;

@@ -63,3 +63,44 @@ TEST(SpriteSmoothingTests, ClampBordersAndPreserveSolidPixelsAndThinLines)
         for (int x = 0; x < 6; x++)
             EXPECT_EQ(Scale2xReference(line, 3, 3, x, y), line[(y / 2) * 3 + x / 2]);
 }
+
+TEST(SpriteSmoothingTests, TileEdgesNeitherLoseCoverageNorExpandIntoAdjacentTiles)
+{
+    using OpenRCT2::Test::Scale2xCoverageReference;
+    const std::array<uint8_t, 9> edge = { 0, 0, 0, 0, 214, 214, 0, 214, 214 };
+    ASSERT_EQ(Scale2xReference(edge, 3, 3, 2, 2), 0);
+    EXPECT_EQ(Scale2xCoverageReference(edge, 3, 3, 2, 2), 214);
+
+    const std::array<uint8_t, 9> outside = { 0, 202, 0, 202, 0, 7, 0, 7, 0 };
+    ASSERT_EQ(Scale2xReference(outside, 3, 3, 2, 2), 202);
+    EXPECT_EQ(Scale2xCoverageReference(outside, 3, 3, 2, 2), 0);
+}
+
+TEST(SpriteSmoothingTests, EveryNeighbourhoodPreservesCoverageAndStillSmoothsOpaqueColours)
+{
+    using OpenRCT2::Test::Scale2xCoverageReference;
+    constexpr std::array<uint8_t, 3> colours = { 0, 46, 202 };
+    bool smoothed = false;
+    for (int pattern = 0; pattern < 19683; pattern++)
+    {
+        std::array<uint8_t, 9> source{};
+        auto remaining = pattern;
+        for (auto& pixel : source)
+        {
+            pixel = colours[remaining % 3];
+            remaining /= 3;
+        }
+        for (int y = 2; y < 4; y++)
+        {
+            for (int x = 2; x < 4; x++)
+            {
+                const auto canonical = Scale2xReference(source, 3, 3, x, y);
+                const auto filtered = Scale2xCoverageReference(source, 3, 3, x, y);
+                EXPECT_EQ(filtered == 0, source[4] == 0);
+                EXPECT_EQ(filtered, (canonical == 0) == (source[4] == 0) ? canonical : source[4]);
+                smoothed |= filtered != source[4];
+            }
+        }
+    }
+    EXPECT_TRUE(smoothed);
+}

@@ -34,4 +34,11 @@ namespace OpenRCT2::Test
             return x % 2 == 0 ? (d == b ? d : e) : (b == f ? f : e);
         return x % 2 == 0 ? (d == h ? d : e) : (h == f ? f : e);
     }
+
+    inline uint8_t Scale2xCoverageReference(std::span<const uint8_t> source, int width, int height, int x, int y)
+    {
+        const auto original = source[(y / 2) * width + x / 2];
+        const auto scaled = Scale2xReference(source, width, height, x, y);
+        return (original == 0) == (scaled == 0) ? scaled : original;
+    }
 } // namespace OpenRCT2::Test
