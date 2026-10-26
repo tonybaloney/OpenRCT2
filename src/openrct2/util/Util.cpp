@@ -12,10 +12,15 @@
 #include <algorithm>
 #include <random>
 
-uint32_t UtilRand()
+std::mt19937& GetUtilRandomEngine()
 {
     thread_local std::mt19937 _prng(std::random_device{}());
-    return _prng();
+    return _prng;
+}
+
+uint32_t UtilRand()
+{
+    return GetUtilRandomEngine()();
 }
 
 // Returns a random floating point number from the Standard Normal Distribution; mean of 0 and standard deviation of 1.

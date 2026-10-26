@@ -18,6 +18,8 @@ $sourceHashes = Get-Content -LiteralPath (Join-Path $source 'source-hashes.json'
 $pinnedSources = @{
     engine_source = 'src\openrct2\peep\GuestDecision.cpp'
     replay_harness = 'test\tests\GuestDecisionDataset.cpp'
+    utility_rng_source = 'src\openrct2\util\Util.cpp'
+    utility_rng_header = 'src\openrct2\util\Util.h'
     exporter = 'scripts\produce-d3-dataset.mjs'
     labeler = 'scripts\d3-dataset.mjs'
     tokenizer_helper = 'scripts\tokenize-d3-dataset.py'
@@ -58,7 +60,8 @@ $sourceFiles = @(
     'scripts\package-d3-dataset.ps1', 'test\tests\d3-dataset.test.mjs',
     'test\tests\GuestDecisionDataset.cpp', 'test\tests\GuestDecisionTests.cpp',
     'test\tests\tests.vcxproj', 'test\tests\CMakeLists.txt',
-    'src\openrct2\peep\GuestDecision.cpp', 'src\openrct2\peep\GuestDecision.h'
+    'src\openrct2\peep\GuestDecision.cpp', 'src\openrct2\peep\GuestDecision.h',
+    'src\openrct2\util\Util.cpp', 'src\openrct2\util\Util.h'
 )
 foreach ($relative in $sourceFiles) {
     $to = Join-Path $target (Join-Path 'source' $relative)
@@ -70,7 +73,12 @@ if ($LASTEXITCODE -ne 0) { throw 'Cannot determine source revision.' }
 $checkpointIndex = Get-Content -LiteralPath (Join-Path $source 'audit\case-index.json') -Raw | ConvertFrom-Json
 $checkpoints = $checkpointIndex | Group-Object checkpoint_sha256 | ForEach-Object {
     $entry = $_.Group[0]
-    [ordered]@{ sha256 = $entry.checkpoint_sha256; local_path = $entry.checkpoint; world = $entry.world }
+    [ordered]@{
+        sha256 = $entry.checkpoint_sha256
+        local_path = $entry.checkpoint
+        world = $entry.world
+        utility_rng_state = $entry.utility_rng_state
+    }
 }
 $replayManifest = [ordered]@{
     source_commit = $commit

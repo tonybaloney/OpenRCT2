@@ -12,9 +12,11 @@
 #include "../core/Money.hpp"
 
 #include <limits>
+#include <random>
 #include <type_traits>
 
 uint32_t UtilRand();
+std::mt19937& GetUtilRandomEngine();
 float UtilRandNormalDistributed();
 
 template<typename T>

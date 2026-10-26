@@ -409,7 +409,10 @@ from disjoint focal-guest/seed-family partitions, then evaluates the native
 continuation and every offered intervention in fresh processes/profiles using two matched initial RNG
 replicas and 3,200/9,600/24,000-tick horizons. All nonauthoring save chunks must
 survive restore exactly; native replay must match before labeling. Collection
-is bounded by branch/disk caps and a one-hour dispatch deadline; in-progress
+also records/restores the utility RNG used by ride music, rather than ignoring
+ride differences from its normal OS-seeded randomness. Normal gameplay keeps
+its existing RNG behavior.
+Collection is bounded by branch/disk caps and a one-hour dispatch deadline; in-progress
 groups finish. Actual retained groups, not augmented rows, determine dataset
 size. A later 5,000-group target is not claimed achieved by a capped pilot.
 Do not rebuild while the collector is running.

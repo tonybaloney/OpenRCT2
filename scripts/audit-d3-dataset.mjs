@@ -13,6 +13,7 @@ assert.equal(index.size, cases.length);
 const guests = new Map();
 for (const entry of cases) {
     assert.equal(render(entry), entry.prompt);
+    assert.equal(sha(entry.utility_rng_state), entry.world.utility_rng, 'Missing/mismatched utility RNG checkpoint');
     assert(!guests.has(entry.guest_id) || guests.get(entry.guest_id) === entry.split);
     guests.set(entry.guest_id, entry.split);
 }
@@ -49,6 +50,17 @@ for (const split of splits) {
         assert.equal(raw.fresh_process_per_branch, true);
         assert.deepEqual(raw.horizons, manifest.horizons);
         assert.equal(raw.results.length, manifest.replicas * (entry.features.options.length + 1));
+        const actions = new Set();
+        for (const result of raw.results) {
+            assert(Number.isInteger(result.replica) && result.replica >= 0 && result.replica < manifest.replicas);
+            assert(Number.isInteger(result.option) && result.option >= -1 && result.option < entry.features.options.length);
+            const key = `replica-${result.replica}-option-${result.option}`;
+            assert(!actions.has(key), 'Duplicate counterfactual branch');
+            actions.add(key);
+            assert.deepEqual(result, await read(path.join('audit', row.group_id, key, 'branch.json')));
+        }
+        assert.equal(entry.uninterrupted_probe.matched, true);
+        assert.deepEqual(raw.results[0].probe_world_256, entry.uninterrupted_probe.world);
         const repeat = await read(path.join('audit', row.group_id, 'native-repeat', 'branch.json'));
         assert.deepEqual(repeat, raw.results[0], 'Native repeat differs from baseline');
         assert.equal(raw.native_replay_sha256, sha(canonical(repeat)));

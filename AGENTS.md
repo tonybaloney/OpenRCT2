@@ -181,6 +181,8 @@ The dataset targets D3's 255-code classifier readout, not chat/SFT completions.
 Dataset-only preview/validation guards preserve RNG, including rain/umbrella
 eligibility peeks. Registry spatial lookup vectors and normal post-load caches
 are rebuilt; whole-world/source-continuation checks reject restoration errors.
+The separate utility RNG (used by ride music) is seeded and captured/restored
+in audit sidecars too; no ride chunks are ignored to hide tune differences.
 Keep metadata and audit mappings out of input text. Censored initial journeys
 do not receive action labels; later unrelated native rides do not censor an
 already resolved initial journey. Observed departures use an explicit zero-utility
