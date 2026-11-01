@@ -383,8 +383,9 @@ RenderTarget TextureCache::GetGlyphAsRT(const ImageId imageId, const PaletteMap&
 
 void TextureCache::FreeTextures()
 {
-    // Free array texture
     glCall(glDeleteTextures, 1, &_atlasesTexture);
+    glCall(glDeleteTextures, 1, &_paletteTexture);
+    glCall(glDeleteTextures, 1, &_blendPaletteTexture);
     _textureCache.clear();
     std::fill(_indexMap.begin(), _indexMap.end(), kUnusedIndex);
 }

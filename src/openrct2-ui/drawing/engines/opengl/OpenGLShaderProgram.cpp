@@ -105,6 +105,7 @@ OpenGLShaderProgram::OpenGLShaderProgram(const char* name)
         Console::Error::WriteLine("Error linking %s", name);
         Console::Error::WriteLine(buffer);
 
+        glCall(glDeleteProgram, _id);
         throw std::runtime_error("Failed to link OpenGL shader.");
     }
 }

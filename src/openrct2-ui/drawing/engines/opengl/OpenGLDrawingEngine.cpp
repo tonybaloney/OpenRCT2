@@ -30,8 +30,10 @@
     #include <algorithm>
     #include <cassert>
     #include <cmath>
+    #include <exception>
     #include <openrct2/GameState.h>
     #include <openrct2/config/Config.h>
+    #include <openrct2/core/Console.hpp>
     #include <openrct2/drawing/Drawing.Sprite.h>
     #include <openrct2/drawing/Drawing.String.h>
     #include <openrct2/drawing/Drawing.h>
@@ -212,6 +214,7 @@ private:
     IUiContext& _uiContext;
     SDL_Window* _window = nullptr;
     SDL_GLContext _context = nullptr;
+    bool _openGLInitialised = false;
 
     uint32_t _width = 0;
     uint32_t _height = 0;
@@ -249,8 +252,28 @@ public:
 
     ~OpenGLDrawingEngine() override
     {
+        if (_openGLInitialised && SDL_GL_GetCurrentContext() != _context && SDL_GL_MakeCurrent(_window, _context) != 0)
+        {
+            Console::Error::WriteLine("Unable to activate OpenGL context for resource destruction: %s", SDL_GetError());
+            std::terminate();
+        }
+        if (_openGLInitialised)
+        {
+            glCall(glUseProgram, 0);
+        }
+
+        // All GL resources must be released before their context, including after partial initialisation.
+        _drawingContext.reset();
         _applyPaletteShader.reset();
-        SDL_GL_DeleteContext(_context);
+        _copyRectShader.reset();
+        _screenFramebuffer.reset();
+        _scaleFramebuffer.reset();
+        _smoothScaleFramebuffer.reset();
+        _tempFramebuffer.reset();
+        if (_context != nullptr)
+        {
+            SDL_GL_DeleteContext(_context);
+        }
     }
 
     void Initialise() override
@@ -267,12 +290,16 @@ public:
             snprintf(szRequiredVersion, 32, "OpenGL %d.%d", requiredVersion.Major, requiredVersion.Minor);
             throw std::runtime_error(std::string(szRequiredVersion) + std::string(" not available."));
         }
-        SDL_GL_MakeCurrent(_window, _context);
+        if (SDL_GL_MakeCurrent(_window, _context) != 0)
+        {
+            throw std::runtime_error(std::string("Unable to activate OpenGL context: ") + SDL_GetError());
+        }
 
         if (!OpenGLAPI::Initialise())
         {
             throw std::runtime_error("Unable to initialise OpenGL.");
         }
+        _openGLInitialised = true;
 
         _drawingContext->Initialise();
 

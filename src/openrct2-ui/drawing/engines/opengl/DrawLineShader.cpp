@@ -81,6 +81,7 @@ DrawLineShader::DrawLineShader()
 DrawLineShader::~DrawLineShader()
 {
     glCall(glDeleteBuffers, 1, &_vbo);
+    glCall(glDeleteBuffers, 1, &_vboInstances);
     glCall(glDeleteVertexArrays, 1, &_vao);
 }
 
