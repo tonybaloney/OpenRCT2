@@ -7,8 +7,10 @@
 
 #pragma once
 
+#include "../drawing/Colour.h"
 #include "GuestNarrative.h"
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -46,6 +48,9 @@ namespace OpenRCT2
     struct IGuestDecisionBackend
     {
         virtual ~IGuestDecisionBackend() = default;
+        virtual void prepare(const std::atomic_bool&)
+        {
+        }
         virtual std::vector<float> decide(const GuestDecisionSnapshot&, const std::atomic_bool& cancelled) = 0;
     };
 
@@ -57,6 +62,16 @@ namespace OpenRCT2
         unavailable,
         suspended,
     };
+
+    enum class GuestDecisionCohort : uint8_t
+    {
+        baseline,
+        fineTuned,
+    };
+
+    GuestDecisionCohort AssignGuestDecisionCohort(uint32_t guestId);
+    std::optional<GuestDecisionCohort> GetGuestDecisionCohort(uint32_t guestId);
+    Drawing::Colour GetGuestDecisionShirtColour(uint32_t guestId, Drawing::Colour original);
 
     std::optional<size_t> SelectGuestDecision(const std::vector<float>& probabilities, size_t expected);
 
@@ -70,15 +85,16 @@ namespace OpenRCT2
             std::optional<size_t> choice;
             std::chrono::steady_clock::time_point submitted;
             std::vector<float> probabilities;
+            GuestDecisionCohort cohort = GuestDecisionCohort::baseline;
         };
         static constexpr size_t kCapacity = 8;
 
-        explicit GuestDecisionService(Factory factory);
+        explicit GuestDecisionService(Factory factory, Factory comparisonFactory = {});
         ~GuestDecisionService();
-        bool submit(GuestDecisionSnapshot snapshot);
+        bool submit(GuestDecisionSnapshot snapshot, GuestDecisionCohort cohort = GuestDecisionCohort::baseline);
         std::optional<Result> poll();
         void reset();
-        void reconfigure(Factory factory);
+        void reconfigure(Factory factory, Factory comparisonFactory = {});
         GuestDecisionStatus status();
         size_t outstanding();
 
@@ -87,6 +103,7 @@ namespace OpenRCT2
         std::mutex _mutex;
         std::condition_variable _changed;
         Factory _factory;
+        Factory _comparisonFactory;
         std::deque<Result> _pending, _completed;
         std::shared_ptr<std::atomic_bool> _cancellation;
         std::thread _worker;
@@ -97,10 +114,15 @@ namespace OpenRCT2
 
     struct GuestDecisionStats
     {
+        struct CohortStats
+        {
+            uint32_t submitted{}, applied{}, stale{}, fallback{};
+        };
         GuestDecisionStatus status = GuestDecisionStatus::disabled;
         uint32_t submitted{}, applied{}, stale{}, fallback{};
         size_t outstanding{};
         uint32_t traceFailures{};
+        std::array<CohortStats, 2> cohorts{};
     };
 
     enum class GuestDecisionOutcome
@@ -125,6 +147,8 @@ namespace OpenRCT2
         uint32_t elapsedMilliseconds{};
         std::optional<uint16_t> headingAtApply;
         std::string rejection;
+        std::optional<GuestDecisionCohort> cohort;
+        std::string modelId;
     };
 
     using GuestDecisionTraceSink = std::function<void(const GuestDecisionRecord&)>;
@@ -134,7 +158,9 @@ namespace OpenRCT2
     const std::deque<GuestDecisionRecord>& GetGuestDecisionHistory();
     const GuestDecisionRecord* GetGuestDecisionRecord(uint16_t entityId, uint32_t guestId);
 
-    void ConfigureGuestDecisions(GuestDecisionService::Factory factory);
+    void ConfigureGuestDecisions(
+        GuestDecisionService::Factory factory, GuestDecisionService::Factory comparisonFactory = {}, bool comparison = false,
+        std::string modelId = {});
     void ResetGuestDecisions();
     void ShutdownGuestDecisions();
     void UpdateGuestDecisions();

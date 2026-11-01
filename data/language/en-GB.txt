@@ -3908,3 +3908,11 @@ STR_7114    :Show destinations on park
 STR_7115    :Show this guest's latest offered destinations on the park. Lines are not pathfinding routes.
 STR_7116    :Blue: offered. Green: accepted. Orange: current target. Lines are not routes.
 STR_7117    :Current target
+STR_7118    :Live A/B: D3-Lite vs fine-tuned (50/50)
+STR_7119    :Requires both compatible models. Stable guest cohorts use the same anonymous prompt and safety gates. Missing models disable the experiment.
+STR_7120    :Colour shirts by A/B assignment
+STR_7121    :Blue = A (existing), purple = B (fine-tuned). Assignment is not acceptance. Original colours return when hidden; purchased items are unchanged.
+STR_7122    :B: compatible fine-tuned model not installed
+STR_7123    :B: FT files present; verified on worker load
+STR_7124    :Cohort {STRING} | Model: {STRING}
+STR_7125    :{STRING}: accepted {INT32}, native {INT32}, stale {INT32}, sent {INT32}

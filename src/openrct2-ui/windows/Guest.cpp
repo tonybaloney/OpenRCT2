@@ -1965,13 +1965,19 @@ namespace OpenRCT2::Ui::Windows
                 return;
             const auto stats = GetGuestDecisionStats();
             const auto textWidth = width - 12;
+            const auto* record = GetGuestDecisionRecord(guest->id.ToUnderlying(), guest->peepId);
+            const auto cohort = GetGuestDecisionCohort(guest->peepId);
+            const auto modelId = record
+                ? record->modelId
+                : Config::Get().interface.guestDecisionModel + (cohort == GuestDecisionCohort::fineTuned ? "-ft" : "");
             DrawGuestDecisionText(
                 rt, windowPos + ScreenCoordsXY{ 6, 48 }, textWidth,
-                FormatStringID(STR_GUEST_DECISION_MODEL_NAME, Config::Get().interface.guestDecisionModel.c_str()));
+                cohort ? FormatStringID(
+                             STR_GUEST_DECISION_COHORT, *cohort == GuestDecisionCohort::baseline ? "A" : "B", modelId.c_str())
+                       : FormatStringID(STR_GUEST_DECISION_MODEL_NAME, modelId.c_str()));
             DrawGuestDecisionText(
                 rt, windowPos + ScreenCoordsXY{ 6, 62 }, textWidth,
                 FormatStringID(GuestDecisionStatusLabel(stats.status), stats.applied));
-            const auto* record = GetGuestDecisionRecord(guest->id.ToUnderlying(), guest->peepId);
             if (!record)
             {
                 DrawGuestDecisionText(rt, windowPos + ScreenCoordsXY{ 6, 82 }, textWidth, STR_GUEST_DECISION_NO_RECORD);

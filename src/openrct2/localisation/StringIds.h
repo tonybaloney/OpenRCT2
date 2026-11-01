@@ -1831,6 +1831,14 @@ enum : StringId
     STR_GUEST_DECISION_OVERLAY_TIP = 7115,
     STR_GUEST_DECISION_OVERLAY_LEGEND = 7116,
     STR_GUEST_DECISION_OVERLAY_TARGET = 7117,
+    STR_GUEST_DECISION_AB = 7118,
+    STR_GUEST_DECISION_AB_TIP = 7119,
+    STR_GUEST_DECISION_COLOURS = 7120,
+    STR_GUEST_DECISION_COLOURS_TIP = 7121,
+    STR_GUEST_DECISION_FT_MISSING = 7122,
+    STR_GUEST_DECISION_FT_INSTALLED = 7123,
+    STR_GUEST_DECISION_COHORT = 7124,
+    STR_GUEST_DECISION_COHORT_COUNTERS = 7125,
 
     // Have to include resource strings (from scenarios and objects) for the time being now that language is partially working
     /* MAX_STR_COUNT = 32768 */ // MAX_STR_COUNT - upper limit for number of strings, not the current count strings

@@ -280,6 +280,67 @@ age; it is not a live eligibility or correctness check. Only one guest can be
 shown at a time. Switching tabs, closing that guest window or loading another
 park clears the overlay. It does not request inference or change simulation state.
 
+### Live model A/B and shirt colours
+
+**Options > Advanced > Live A/B: D3-Lite vs fine-tuned (50/50)** is opt-in and
+unavailable until both model packages are installed. A is the existing D3-Lite
+weights; B is a compatible fine-tuned D3-Lite. Both use `neutral-anonymous-v1`,
+the same native candidate discovery, permutation averaging, confidence gates
+and main-thread revalidation. Ordinary single-model gameplay keeps its existing
+prompt. This experiment compares weights under a shared anonymous input contract,
+not the original prompt against a new prompt.
+
+**Colour shirts by A/B assignment** is a separate toggle: A is light blue and B
+is purple. This is a render-only remap of individual guest sprites, not a
+clothing or inventory change. Original colours return when the toggle or
+experiment is off, or inference is suspended/unavailable. Ride passenger artwork
+is unchanged. Cohort colours indicate assignment, including guests with no
+eligible request and requests that fall back to native logic; they do not indicate
+accepted decisions or better outcomes. Guest D3 windows/feed rows and traces
+identify A/B, with separate request, accepted, low-confidence and stale counters.
+
+Assignments use a fixed hash of the persistent guest ID without consuming
+simulation RNG. The split is approximately 50/50, not an exact headcount.
+Assignments survive request/model resets for the same guest ID, but are not
+stored as new save fields. Turning A/B off does not undo previously applied
+destinations. Use a fresh copy of the starting park for a clean experiment.
+Both model contexts share one worker, a total eight-request capacity, the existing
+park-wide submission budget and the inference mutex. Both are verified/prepared
+before any A/B forward pass; missing/corrupt weights or insufficient GPU memory
+stop the experiment instead of substituting A for B. Extra GPU memory is required
+for both contexts. Multiplayer/replay remain suspended.
+
+No fine-tuned checkpoint is supplied, downloaded or trained by this feature.
+An eventual D3-aware trainer must preserve noncausal attention, the tokenizer,
+last-token pooling and the 255-by-1024 FP32 readout. A chat/SFT adapter is not a
+compatible replacement. Merge the compatible LoRA into the backbone and convert
+it for the existing pinned runtime, then install this layout:
+
+```text
+bin\models\guest-decisions\d3-lite-ft\
+    ft-manifest.json
+    d3-lite\
+        d3-lite.gguf
+        readout.f32
+        decision_config.json
+```
+
+Keep `decision_config.json` identical to the baseline D3-Lite contract. Supply
+the resulting readout, even if it was frozen during training. `ft-manifest.json`
+must declare `"model_id": "d3-lite"`, `"input_schema": "neutral-anonymous-v1"`,
+`"base_revision": "03560c26f5199c3c04129a2ccb38960c913635e0"` (the starting D3-Lite
+checkpoint revision), and a nonempty `"training_run"` identifier. Its `"files"`
+object must contain entries for the three filenames above, each with the exact
+positive `"bytes"` count and lowercase SHA256 `"sha256"`. The UI checks package
+presence/size/contract; the worker streams and verifies every file checksum
+before loading. Reopen Options after installing files to refresh availability.
+The manifest records declared provenance, not proof of training quality.
+Keep all weights, readouts and local manifests under ignored `bin`.
+
+Live cohorts share queues and ride capacity, so they can affect each other's
+outcomes. The counters show routing/fallback behaviour, not a causal park-wide
+quality benchmark. Retain separate fresh-park evaluations and locked holdouts.
+
 Results older than five wall-clock seconds or 512 simulation ticks, reused guest IDs, changed
 motives/intents, and newly ineligible targets are rejected on the simulation thread. Low confidence,
 timeouts and failures leave native behavior running. Approved choices update the existing target,

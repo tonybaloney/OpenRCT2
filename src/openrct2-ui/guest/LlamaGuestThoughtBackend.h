@@ -48,9 +48,11 @@ namespace OpenRCT2::Ui
     };
 
     std::vector<GuestDecisionModel> LoadGuestDecisionModels(const std::string& directory);
+    bool IsGuestDecisionFineTuneAvailable(const std::string& directory, bool verifyHashes = false);
     std::vector<GuestThoughtModel> LoadGuestThoughtModels(const std::string& modelDirectory);
     std::unique_ptr<IGuestThoughtBackend> CreateLlamaGuestThoughtBackend(
         std::string runtimeDirectory, std::string modelPath, GuestThoughtBackendOptions options = {});
     std::unique_ptr<IGuestDecisionBackend> CreateLlamaGuestDecisionBackend(
-        std::string runtimeDirectory, std::string modelDirectory, bool omitIncumbentHints = false);
+        std::string runtimeDirectory, std::string modelDirectory, bool omitIncumbentHints = false,
+        bool anonymousChoices = false);
 } // namespace OpenRCT2::Ui

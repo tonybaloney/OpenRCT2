@@ -1196,6 +1196,7 @@ void Ui::ApplyGuestThoughtSettings()
 
 void Ui::ApplyGuestDecisionSettings()
 {
+    GfxInvalidateScreen();
 #ifdef ENABLE_GUEST_THOUGHTS
     if (Config::Get().interface.guestDecisions)
     {
@@ -1203,18 +1204,46 @@ void Ui::ApplyGuestDecisionSettings()
         const auto runtime = Path::Combine(directory, "guest-thoughts");
         const auto models = Path::Combine(directory, "models", "guest-decisions");
         const auto id = Config::Get().interface.guestDecisionModel;
-        ConfigureGuestDecisions([runtime, models, id] {
+        const auto comparison = Config::Get().interface.guestDecisionAB;
+        if (comparison)
+        {
+            try
+            {
+                if (id != "d3-lite" || !IsGuestDecisionFineTuneAvailable(models))
+                {
+                    ConfigureGuestDecisions({}, {}, true, id);
+                    return;
+                }
+            }
+            catch (const std::exception& e)
+            {
+                LOG_ERROR("Guest A/B unavailable: %s", e.what());
+                ConfigureGuestDecisions({}, {}, true, id);
+                return;
+            }
+        }
+        GuestDecisionService::Factory baseline = [runtime, models, id, comparison] {
             for (const auto& model : LoadGuestDecisionModels(models))
             {
                 if (model.id == id)
                 {
                     if (!model.available)
                         throw std::runtime_error("Selected guest decision model is not installed or is incomplete.");
-                    return CreateLlamaGuestDecisionBackend(runtime, Path::Combine(models, id));
+                    if (comparison && id != "d3-lite")
+                        throw std::runtime_error("Guest A/B requires D3-Lite as the baseline.");
+                    return CreateLlamaGuestDecisionBackend(runtime, Path::Combine(models, id), comparison, comparison);
                 }
             }
             throw std::runtime_error("Unknown guest decision model in configuration.");
-        });
+        };
+        GuestDecisionService::Factory fineTuned;
+        if (comparison)
+            fineTuned = [runtime, models] {
+                if (!IsGuestDecisionFineTuneAvailable(models, true))
+                    throw std::runtime_error("Fine-tuned D3-Lite model is not installed or is incomplete.");
+                return CreateLlamaGuestDecisionBackend(runtime, Path::Combine(models, "d3-lite-ft", "d3-lite"), true, true);
+            };
+        ConfigureGuestDecisions(std::move(baseline), std::move(fineTuned), comparison, id);
         return;
     }
 #endif

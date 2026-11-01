@@ -32,6 +32,8 @@ namespace OpenRCT2::Ui::Windows
 
     class MainWindow final : public Window
     {
+        std::optional<GuestDecisionStatus> _cohortDisplayStatus;
+
     public:
         void onOpen() override
         {
@@ -63,6 +65,18 @@ namespace OpenRCT2::Ui::Windows
         {
             if (gGuestDecisionOverlaySelection)
                 invalidate();
+            if (Config::Get().interface.guestDecisionAB && Config::Get().interface.guestDecisionCohortColours)
+            {
+                const auto status = GetGuestDecisionStats().status;
+                if (_cohortDisplayStatus != status)
+                    invalidate();
+                _cohortDisplayStatus = status;
+            }
+            else if (_cohortDisplayStatus)
+            {
+                _cohortDisplayStatus.reset();
+                invalidate();
+            }
         }
 
     private:
@@ -158,7 +172,8 @@ namespace OpenRCT2::Ui::Windows
                 std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - record->updated).count());
             DrawGuestDecisionText(
                 rt, legend, legendWidth,
-                guest->getName() + " - " + FormatStringID(GuestDecisionOutcomeLabel(*record)) + " - "
+                (record->cohort ? std::string(*record->cohort == GuestDecisionCohort::baseline ? "A: " : "B: ") : "")
+                    + guest->getName() + " - " + FormatStringID(GuestDecisionOutcomeLabel(*record)) + " - "
                     + FormatStringID(STR_GUEST_DECISION_AGE, age, record->elapsedMilliseconds));
             DrawGuestDecisionText(rt, legend + ScreenCoordsXY{ 0, 13 }, legendWidth, STR_GUEST_DECISION_OVERLAY_LEGEND);
         }

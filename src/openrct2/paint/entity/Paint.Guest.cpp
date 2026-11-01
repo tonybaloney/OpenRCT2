@@ -11,6 +11,7 @@
 
 #include "../../drawing/ImageId.hpp"
 #include "../../entity/Guest.h"
+#include "../../peep/GuestDecision.h"
 #include "../../peep/PeepSpriteIds.h"
 #include "../../profiling/Profiling.h"
 #include "../Paint.h"
@@ -30,7 +31,8 @@ void PaintGuest(PaintSession& session, const Guest& guest, int32_t orientation)
     Direction direction = (orientation >> 3);
 
     auto baseImageData = PaintPeepGetBaseImageAndOffset(guest, direction);
-    auto imageId = ImageId(baseImageData.baseImageId, guest.tShirtColour, guest.trousersColour);
+    auto imageId = ImageId(
+        baseImageData.baseImageId, GetGuestDecisionShirtColour(guest.peepId, guest.tShirtColour), guest.trousersColour);
 
     // In the following 4 calls to PaintAddImageAsParent/PaintAddImageAsChild, we add 5 (instead of 3) to the
     // bound_box_offset_z to make sure peeps are drawn on top of railways

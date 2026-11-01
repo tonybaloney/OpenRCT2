@@ -16,6 +16,7 @@
 #include <openrct2/Game.h>
 #include <openrct2/GameState.h>
 #include <openrct2/OpenRCT2.h>
+#include <openrct2/config/Config.h>
 #include <openrct2/core/Json.hpp>
 #include <openrct2/entity/Guest.h>
 #include <openrct2/peep/GuestDecision.h>
@@ -65,6 +66,8 @@ namespace
         std::atomic_int calls{}, cancelled{}, destroyed{};
         std::atomic_bool block{};
         std::atomic_bool ambiguous{};
+        std::atomic_int preparations{};
+        bool failPreparation{};
         std::thread::id thread;
     };
 
@@ -80,6 +83,12 @@ namespace
         ~Backend() override
         {
             ++_state->destroyed;
+        }
+        void prepare(const std::atomic_bool&) override
+        {
+            ++_state->preparations;
+            if (_state->failPreparation)
+                throw std::runtime_error("Comparison model preparation failed.");
         }
         std::vector<float> decide(const GuestDecisionSnapshot& snapshot, const std::atomic_bool& cancelled) override
         {
@@ -281,6 +290,65 @@ TEST(GuestDecisionService, LazyInferenceIsOffThreadAndCompletionsAreConsumedOnce
     EXPECT_EQ(service.status(), GuestDecisionStatus::ready);
 }
 
+TEST(GuestDecisionService, ComparisonUsesDistinctBackendsWithinOneQueueAndCancelsBothOnReconfigure)
+{
+    const auto baseline = std::make_shared<State>();
+    const auto fineTuned = std::make_shared<State>();
+    GuestDecisionService service(
+        [baseline] { return std::make_unique<Backend>(baseline); },
+        [fineTuned] { return std::make_unique<Backend>(fineTuned); });
+    ASSERT_TRUE(service.submit(Snapshot(), GuestDecisionCohort::baseline));
+    ASSERT_TRUE(service.submit(Snapshot(), GuestDecisionCohort::fineTuned));
+    ASSERT_TRUE(Wait([&] { return baseline->calls == 1 && fineTuned->calls == 1; }));
+    auto a = service.poll();
+    ASSERT_TRUE(a);
+    EXPECT_EQ(a->cohort, GuestDecisionCohort::baseline);
+    std::optional<GuestDecisionService::Result> b;
+    ASSERT_TRUE(Wait([&] { return (b = service.poll()).has_value(); }));
+    EXPECT_EQ(b->cohort, GuestDecisionCohort::fineTuned);
+    EXPECT_GT(baseline->preparations, 0);
+    EXPECT_GT(fineTuned->preparations, 0);
+    service.reconfigure([baseline] { return std::make_unique<Backend>(baseline); });
+    ASSERT_TRUE(Wait([&] { return baseline->destroyed == 1 && fineTuned->destroyed == 1; }));
+    EXPECT_FALSE(service.submit(Snapshot(), GuestDecisionCohort::fineTuned));
+}
+
+TEST(GuestDecisionService, ComparisonPreparationFailureNeverServesBaselineAsFineTuned)
+{
+    const auto baseline = std::make_shared<State>();
+    const auto fineTuned = std::make_shared<State>();
+    fineTuned->failPreparation = true;
+    GuestDecisionService service(
+        [baseline] { return std::make_unique<Backend>(baseline); },
+        [fineTuned] { return std::make_unique<Backend>(fineTuned); });
+    ASSERT_TRUE(service.submit(Snapshot(), GuestDecisionCohort::baseline));
+    ASSERT_TRUE(Wait([&] { return service.status() == GuestDecisionStatus::unavailable; }));
+    EXPECT_EQ(baseline->calls, 0);
+    EXPECT_EQ(fineTuned->calls, 0);
+    EXPECT_FALSE(service.poll());
+    EXPECT_FALSE(service.submit(Snapshot(), GuestDecisionCohort::fineTuned));
+}
+
+TEST(GuestDecisionService, ComparisonSharesOneCapacityAndResetCancelsAnActiveFineTunedRequest)
+{
+    const auto baseline = std::make_shared<State>();
+    const auto fineTuned = std::make_shared<State>();
+    fineTuned->block = true;
+    GuestDecisionService service(
+        [baseline] { return std::make_unique<Backend>(baseline); },
+        [fineTuned] { return std::make_unique<Backend>(fineTuned); });
+    ASSERT_TRUE(service.submit(Snapshot(), GuestDecisionCohort::fineTuned));
+    ASSERT_TRUE(Wait([&] { return fineTuned->calls == 1; }));
+    for (size_t i = 1; i < GuestDecisionService::kCapacity; ++i)
+        ASSERT_TRUE(service.submit(Snapshot(), GuestDecisionCohort::baseline));
+    EXPECT_EQ(service.outstanding(), GuestDecisionService::kCapacity);
+    EXPECT_FALSE(service.submit(Snapshot(), GuestDecisionCohort::fineTuned));
+    service.reset();
+    ASSERT_TRUE(Wait([&] { return fineTuned->cancelled == 1 && service.outstanding() == 0; }));
+    EXPECT_EQ(baseline->calls, 0);
+    EXPECT_FALSE(service.poll());
+}
+
 TEST(GuestDecisionService, CapacityIncludesActivePendingAndUnconsumedResults)
 {
     const auto state = std::make_shared<State>();
@@ -359,9 +427,11 @@ protected:
     std::unique_ptr<IContext> context;
     Guest* guest{};
     std::vector<Ride*> rides;
+    bool originalCohortColours{};
 
     void SetUp() override
     {
+        originalCohortColours = Config::Get().interface.guestDecisionCohortColours;
         gOpenRCT2Headless = true;
         gOpenRCT2NoGraphics = true;
         context = CreateContext();
@@ -402,12 +472,90 @@ protected:
 
     void TearDown() override
     {
+        Config::Get().interface.guestDecisionCohortColours = originalCohortColours;
         ShutdownGuestDecisions();
         if (guest)
             PeepEntityRemove(guest);
         context.reset();
     }
 };
+
+TEST_F(GuestDecisionIntegration, MissingComparisonDisablesBothCohortsWithoutChangingGuestOrRng)
+{
+    const auto state = std::make_shared<State>();
+    ConfigureGuestDecisions([state] { return std::make_unique<Backend>(state); }, {}, true, "d3-lite");
+    Config::Get().interface.guestDecisionCohortColours = true;
+    std::array<std::byte, sizeof(Guest)> before;
+    std::memcpy(before.data(), guest, sizeof(Guest));
+    ScenarioRandSeed(0x12345678, 0x87654321);
+    const auto next = ScenarioRand();
+    ScenarioRandSeed(0x12345678, 0x87654321);
+    EXPECT_EQ(GetGuestDecisionStats().status, GuestDecisionStatus::unavailable);
+    EXPECT_FALSE(GetGuestDecisionCohort(guest->peepId));
+    EXPECT_EQ(GetGuestDecisionShirtColour(guest->peepId, guest->tShirtColour), guest->tShirtColour);
+    UpdateGuestDecisions();
+    EXPECT_EQ(state->calls, 0);
+    EXPECT_EQ(std::memcmp(before.data(), guest, sizeof(Guest)), 0);
+    EXPECT_EQ(ScenarioRand(), next);
+}
+
+TEST_F(GuestDecisionIntegration, StableCohortsRouteRealModelsAndShirtTogglePreservesClothesAndFallbackAssignment)
+{
+    const auto baseline = std::make_shared<State>();
+    const auto fineTuned = std::make_shared<State>();
+    fineTuned->ambiguous = true;
+    while (AssignGuestDecisionCohort(guest->peepId) != GuestDecisionCohort::baseline)
+        ++guest->peepId;
+    ConfigureGuestDecisions(
+        [baseline] { return std::make_unique<Backend>(baseline); },
+        [fineTuned] { return std::make_unique<Backend>(fineTuned); }, true, "d3-lite");
+    EXPECT_EQ(GetGuestDecisionCohort(guest->peepId), GuestDecisionCohort::baseline);
+    Config::Get().interface.guestDecisionCohortColours = true;
+    std::array<std::byte, sizeof(Guest)> before;
+    std::memcpy(before.data(), guest, sizeof(Guest));
+    ScenarioRandSeed(0xABCDEF01, 0x12345678);
+    const auto next = ScenarioRand();
+    ScenarioRandSeed(0xABCDEF01, 0x12345678);
+    EXPECT_EQ(GetGuestDecisionShirtColour(guest->peepId, guest->tShirtColour), Drawing::Colour::lightBlue);
+    EXPECT_EQ(std::memcmp(before.data(), guest, sizeof(Guest)), 0);
+    EXPECT_EQ(ScenarioRand(), next);
+    ASSERT_TRUE(Wait([&] {
+        UpdateGuestDecisions();
+        return GetGuestDecisionStats().cohorts[0].applied > 0;
+    }));
+    auto* record = GetGuestDecisionRecord(guest->id.ToUnderlying(), guest->peepId);
+    ASSERT_NE(record, nullptr);
+    EXPECT_EQ(record->cohort, GuestDecisionCohort::baseline);
+    EXPECT_EQ(record->modelId, "d3-lite");
+    ResetGuestDecisions();
+    EXPECT_EQ(GetGuestDecisionCohort(guest->peepId), GuestDecisionCohort::baseline);
+    const auto oldId = guest->peepId;
+    do
+    {
+        ++guest->peepId;
+    } while (AssignGuestDecisionCohort(guest->peepId) != GuestDecisionCohort::fineTuned);
+    EXPECT_EQ(GetGuestDecisionRecord(guest->id.ToUnderlying(), oldId), nullptr);
+    ASSERT_TRUE(Wait([&] {
+        UpdateGuestDecisions();
+        return GetGuestDecisionStats().cohorts[1].fallback > 0;
+    }));
+    record = GetGuestDecisionRecord(guest->id.ToUnderlying(), guest->peepId);
+    ASSERT_NE(record, nullptr);
+    EXPECT_EQ(record->cohort, GuestDecisionCohort::fineTuned);
+    EXPECT_EQ(record->modelId, "d3-lite-ft");
+    const auto trace = json_t::parse(SerializeGuestDecisionTrace(*record));
+    EXPECT_EQ(trace["ab_cohort"], "B");
+    EXPECT_EQ(trace["prompt_variant"], "neutral-anonymous-v1");
+    EXPECT_EQ(trace["prompt"], record->snapshot.prompt(true, true));
+    EXPECT_EQ(GetGuestDecisionShirtColour(guest->peepId, guest->tShirtColour), Drawing::Colour::brightPurple);
+    Config::Get().interface.guestDecisionCohortColours = false;
+    EXPECT_EQ(GetGuestDecisionShirtColour(guest->peepId, guest->tShirtColour), guest->tShirtColour);
+    gLegacyScene = LegacyScene::titleSequence;
+    EXPECT_FALSE(GetGuestDecisionCohort(guest->peepId));
+    gLegacyScene = LegacyScene::playing;
+    ConfigureGuestDecisions([baseline] { return std::make_unique<Backend>(baseline); });
+    EXPECT_FALSE(GetGuestDecisionCohort(guest->peepId));
+}
 
 TEST_F(GuestDecisionIntegration, CandidateChecksPreserveGuestRideAndSimulationRng)
 {

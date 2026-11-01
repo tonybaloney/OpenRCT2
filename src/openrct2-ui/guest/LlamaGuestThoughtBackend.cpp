@@ -14,6 +14,7 @@
 #include <fstream>
 #include <mutex>
 #include <openrct2/Diagnostic.h>
+#include <openrct2/core/Crypt.h>
 #include <openrct2/core/File.h>
 #include <openrct2/core/Json.hpp>
 #include <openrct2/core/Path.hpp>
@@ -24,6 +25,58 @@
 
 namespace OpenRCT2::Ui
 {
+    bool IsGuestDecisionFineTuneAvailable(const std::string& directory, bool verifyHashes)
+    {
+        const auto root = Path::Combine(directory, "d3-lite-ft");
+        const auto manifestPath = Path::Combine(root, "ft-manifest.json");
+        if (!File::Exists(manifestPath))
+            return false;
+        const auto manifest = Json::ReadFromFile(manifestPath);
+        if (manifest.at("model_id") != "d3-lite" || manifest.at("input_schema") != "neutral-anonymous-v1"
+            || manifest.at("base_revision") != "03560c26f5199c3c04129a2ccb38960c913635e0"
+            || manifest.at("training_run").get<std::string>().empty())
+            throw std::runtime_error("Unsupported fine-tuned guest decision manifest.");
+        const auto modelDirectory = Path::Combine(root, "d3-lite");
+        for (const auto* name : { "d3-lite.gguf", "readout.f32", "decision_config.json" })
+        {
+            const auto file = Path::Combine(modelDirectory, name);
+            if (!File::Exists(file))
+                return false;
+            const auto& entry = manifest.at("files").at(name);
+            if (entry.at("bytes").get<uint64_t>() == 0 || File::GetSize(file) != entry.at("bytes").get<uint64_t>())
+                return false;
+            const auto hash = entry.at("sha256").get<std::string>();
+            if (hash.size() != 64 || hash.find_first_not_of("0123456789abcdef") != std::string::npos)
+                throw std::runtime_error("Invalid fine-tuned guest decision checksum.");
+            if (verifyHashes)
+            {
+                auto algorithm = Crypt::CreateSHA256();
+                std::ifstream stream(std::filesystem::u8path(file), std::ios::binary);
+                std::array<char, 65536> buffer;
+                while (stream.read(buffer.data(), buffer.size()) || stream.gcount() > 0)
+                    algorithm->Update(buffer.data(), static_cast<size_t>(stream.gcount()));
+                if (!stream.eof())
+                    throw std::runtime_error("Cannot read fine-tuned guest decision file.");
+                constexpr char digits[] = "0123456789abcdef";
+                std::string actual;
+                for (const auto byte : algorithm->Finish())
+                {
+                    actual += digits[byte >> 4];
+                    actual += digits[byte & 15];
+                }
+                if (actual != hash)
+                    throw std::runtime_error("Fine-tuned guest decision checksum mismatch.");
+            }
+        }
+        if (File::GetSize(Path::Combine(modelDirectory, "readout.f32")) != 255 * 1024 * sizeof(float))
+            return false;
+        const auto baseline = Json::ReadFromFile(Path::Combine(directory, "d3-lite", "decision_config.json"));
+        const auto fineTuned = Json::ReadFromFile(Path::Combine(modelDirectory, "decision_config.json"));
+        if (baseline != fineTuned)
+            throw std::runtime_error("Fine-tuned classifier contract differs from baseline.");
+        return true;
+    }
+
     std::vector<GuestDecisionModel> LoadGuestDecisionModels(const std::string& directory)
     {
         const auto catalog = Json::ReadFromFile(Path::Combine(directory, "guest-decision-models.json"));
@@ -285,7 +338,9 @@ namespace OpenRCT2::Ui
             const auto feeling = snapshot.feeling();
             const auto needs = snapshot.needs();
             auto user = snapshot.prompt() + "\nMy current feeling is "
-                + (feeling == "toilet" ? "I need a toilet" : feeling == "nauseous" ? "queasy in my stomach" : feeling)
+                + (feeling == "toilet"         ? "I need a toilet"
+                       : feeling == "nauseous" ? "queasy in my stomach"
+                                               : feeling)
                 + (needs.empty() ? ". Write two short sentences about this feeling in one paragraph. "
                                  : ". Write three sentences about this feeling, 30 to 50 words in one paragraph. ")
                 + "Make this feeling clear in affirmative sentences. Describe only this feeling, not the other stats or "
@@ -454,6 +509,7 @@ namespace OpenRCT2::Ui
         LlamaApi _api;
         std::string _directory;
         bool _omitIncumbentHints{};
+        bool _anonymousChoices{};
         llama_model* _model{};
         llama_context* _context{};
         std::vector<float> _readout;
@@ -536,10 +592,11 @@ namespace OpenRCT2::Ui
         }
 
     public:
-        LlamaGuestDecisionBackend(std::string runtime, std::string directory, bool omitIncumbentHints)
+        LlamaGuestDecisionBackend(std::string runtime, std::string directory, bool omitIncumbentHints, bool anonymousChoices)
             : _api(runtime)
             , _directory(std::move(directory))
             , _omitIncumbentHints(omitIncumbentHints)
+            , _anonymousChoices(anonymousChoices)
         {
         }
 
@@ -565,7 +622,7 @@ namespace OpenRCT2::Ui
                     return {};
                 if (!_context)
                     initialise();
-                const auto prompt = snapshot.prompt(_omitIncumbentHints);
+                const auto prompt = snapshot.prompt(_omitIncumbentHints, _anonymousChoices);
                 const auto* vocab = _api.llama_model_get_vocab(_model);
                 const auto count = -_api.llama_tokenize(
                     vocab, prompt.data(), static_cast<int32_t>(prompt.size()), nullptr, 0, false, true);
@@ -612,6 +669,25 @@ namespace OpenRCT2::Ui
             }
         }
 
+        void prepare(const std::atomic_bool& cancelled) override
+        {
+            std::lock_guard inferenceLock(_guestInferenceMutex);
+            if (cancelled || _context)
+                return;
+            _cancelled = &cancelled;
+            try
+            {
+                initialise();
+                _cancelled = nullptr;
+            }
+            catch (...)
+            {
+                _cancelled = nullptr;
+                clear();
+                throw;
+            }
+        }
+
         std::vector<float> decide(const GuestDecisionSnapshot& snapshot, const std::atomic_bool& cancelled) override
         {
             std::lock_guard inferenceLock(_guestInferenceMutex);
@@ -632,15 +708,16 @@ namespace OpenRCT2::Ui
     };
 
     std::unique_ptr<IGuestDecisionBackend> CreateLlamaGuestDecisionBackend(
-        std::string runtime, std::string directory, bool omitIncumbentHints)
+        std::string runtime, std::string directory, bool omitIncumbentHints, bool anonymousChoices)
     {
-        return std::make_unique<LlamaGuestDecisionBackend>(std::move(runtime), std::move(directory), omitIncumbentHints);
+        return std::make_unique<LlamaGuestDecisionBackend>(
+            std::move(runtime), std::move(directory), omitIncumbentHints, anonymousChoices);
     }
 } // namespace OpenRCT2::Ui
 #else
 namespace OpenRCT2::Ui
 {
-    std::unique_ptr<IGuestDecisionBackend> CreateLlamaGuestDecisionBackend(std::string, std::string, bool)
+    std::unique_ptr<IGuestDecisionBackend> CreateLlamaGuestDecisionBackend(std::string, std::string, bool, bool)
     {
         throw std::runtime_error("Embedded guest decisions are not enabled in this build.");
     }

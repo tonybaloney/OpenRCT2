@@ -14,6 +14,7 @@
     #include <filesystem>
     #include <iostream>
     #include <openrct2-ui/guest/LlamaGuestThoughtBackend.h>
+    #include <openrct2/core/Crypt.h>
     #include <openrct2/core/File.h>
     #include <openrct2/core/Json.hpp>
     #include <openrct2/core/Path.hpp>
@@ -105,7 +106,80 @@ protected:
     {
         Json::WriteToFile(Path::Combine(directory, "guest-thought-models.json"), catalog);
     }
+
+    json_t PrepareFineTune()
+    {
+        std::filesystem::create_directories(temporary / "d3-lite");
+        std::filesystem::create_directories(temporary / "d3-lite-ft" / "d3-lite");
+        const auto modelDirectory = Path::Combine(directory, "d3-lite-ft", "d3-lite");
+        json_t codes = json_t::array();
+        for (size_t i = 0; i < 255; ++i)
+            codes.push_back(std::to_string(i));
+        for (size_t i = 0; i < 8; ++i)
+            codes[i] = std::string(1, static_cast<char>('A' + i));
+        const json_t config = { { "format_id", "d3-code-readout-v1" },
+                                { "temperature", 1.0 },
+                                { "attention_mode", "noncausal_full_attention" },
+                                { "codes", codes } };
+        Json::WriteToFile(Path::Combine(directory, "d3-lite", "decision_config.json"), config);
+        Json::WriteToFile(Path::Combine(modelDirectory, "decision_config.json"), config);
+        File::WriteAllBytes(Path::Combine(modelDirectory, "d3-lite.gguf"), "synthetic", 9);
+        std::vector<float> readout(255 * 1024, 0);
+        File::WriteAllBytes(Path::Combine(modelDirectory, "readout.f32"), readout.data(), readout.size() * sizeof(float));
+        json_t manifest = { { "model_id", "d3-lite" },
+                            { "input_schema", "neutral-anonymous-v1" },
+                            { "base_revision", "03560c26f5199c3c04129a2ccb38960c913635e0" },
+                            { "training_run", "synthetic-unit-test-not-a-trained-model" },
+                            { "files", json_t::object() } };
+        for (const auto* name : { "d3-lite.gguf", "readout.f32", "decision_config.json" })
+        {
+            const auto bytes = File::ReadAllBytes(Path::Combine(modelDirectory, name));
+            constexpr char digits[] = "0123456789abcdef";
+            std::string hash;
+            for (const auto byte : Crypt::SHA256(bytes.data(), bytes.size()))
+            {
+                hash += digits[byte >> 4];
+                hash += digits[byte & 15];
+            }
+            manifest["files"][name] = { { "bytes", bytes.size() }, { "sha256", hash } };
+        }
+        Json::WriteToFile(Path::Combine(directory, "d3-lite-ft", "ft-manifest.json"), manifest);
+        return manifest;
+    }
 };
+
+TEST_F(GuestThoughtModelCatalog, FineTuneRequiresExplicitClassifierContractCompleteFilesAndVerifiedChecksums)
+{
+    EXPECT_FALSE(Ui::IsGuestDecisionFineTuneAvailable(directory));
+    const auto manifest = PrepareFineTune();
+    EXPECT_TRUE(Ui::IsGuestDecisionFineTuneAvailable(directory));
+    EXPECT_TRUE(Ui::IsGuestDecisionFineTuneAvailable(directory, true));
+    const auto modelDirectory = Path::Combine(directory, "d3-lite-ft", "d3-lite");
+    File::WriteAllBytes(Path::Combine(modelDirectory, "d3-lite.gguf"), "corrupted", 9);
+    EXPECT_TRUE(Ui::IsGuestDecisionFineTuneAvailable(directory));
+    EXPECT_THROW(Ui::IsGuestDecisionFineTuneAvailable(directory, true), std::runtime_error);
+    File::WriteAllBytes(Path::Combine(modelDirectory, "readout.f32"), "bad", 3);
+    EXPECT_FALSE(Ui::IsGuestDecisionFineTuneAvailable(directory));
+}
+
+TEST_F(GuestThoughtModelCatalog, FineTuneRejectsChatTargetsOtherBackbonesAndChangedAnswerCodes)
+{
+    const auto original = PrepareFineTune();
+    const auto file = Path::Combine(directory, "d3-lite-ft", "ft-manifest.json");
+    for (const auto* field : { "input_schema", "model_id", "base_revision" })
+    {
+        auto invalid = original;
+        invalid[field] = "unsupported";
+        Json::WriteToFile(file, invalid);
+        EXPECT_THROW(Ui::IsGuestDecisionFineTuneAvailable(directory), std::runtime_error) << field;
+    }
+    Json::WriteToFile(file, original);
+    const auto configPath = Path::Combine(directory, "d3-lite-ft", "d3-lite", "decision_config.json");
+    auto config = Json::ReadFromFile(configPath);
+    config["codes"][0] = "Z";
+    Json::WriteToFile(configPath, config);
+    EXPECT_THROW(Ui::IsGuestDecisionFineTuneAvailable(directory), std::runtime_error);
+}
 
 TEST_F(GuestThoughtModelCatalog, AvailabilityRequiresAllShardsAndExactSizes)
 {

@@ -12,6 +12,7 @@
 #include "../GameState.h"
 #include "../OpenRCT2.h"
 #include "../ReplayManager.h"
+#include "../config/Config.h"
 #include "../core/Json.hpp"
 #include "../entity/EntityRegistry.h"
 #include "../entity/Guest.h"
@@ -141,8 +142,9 @@ namespace OpenRCT2
         return best;
     }
 
-    GuestDecisionService::GuestDecisionService(Factory factory)
+    GuestDecisionService::GuestDecisionService(Factory factory, Factory comparisonFactory)
         : _factory(std::move(factory))
+        , _comparisonFactory(std::move(comparisonFactory))
         , _status(_factory ? GuestDecisionStatus::loading : GuestDecisionStatus::disabled)
     {
         _worker = std::thread(&GuestDecisionService::run, this);
@@ -160,13 +162,14 @@ namespace OpenRCT2
         _worker.join();
     }
 
-    bool GuestDecisionService::submit(GuestDecisionSnapshot snapshot)
+    bool GuestDecisionService::submit(GuestDecisionSnapshot snapshot, GuestDecisionCohort cohort)
     {
         std::lock_guard lock(_mutex);
-        if (!_factory || _status == GuestDecisionStatus::unavailable
-            || _pending.size() + _completed.size() + _active >= kCapacity)
+        if (!_factory || (cohort == GuestDecisionCohort::fineTuned && !_comparisonFactory)
+            || _status == GuestDecisionStatus::unavailable || _pending.size() + _completed.size() + _active >= kCapacity)
             return false;
         _pending.push_back({ std::move(snapshot), {}, std::chrono::steady_clock::now() });
+        _pending.back().cohort = cohort;
         _changed.notify_one();
         return true;
     }
@@ -204,12 +207,13 @@ namespace OpenRCT2
         _changed.notify_one();
     }
 
-    void GuestDecisionService::reconfigure(Factory factory)
+    void GuestDecisionService::reconfigure(Factory factory, Factory comparisonFactory)
     {
         std::lock_guard lock(_mutex);
         ++_epoch;
         ++_backendRevision;
         _factory = std::move(factory);
+        _comparisonFactory = std::move(comparisonFactory);
         _pending.clear();
         _completed.clear();
         if (_cancellation)
@@ -220,7 +224,7 @@ namespace OpenRCT2
 
     void GuestDecisionService::run()
     {
-        std::unique_ptr<IGuestDecisionBackend> backend;
+        std::array<std::unique_ptr<IGuestDecisionBackend>, 2> backends;
         uint64_t revision{};
         std::unique_lock lock(_mutex);
         while (!_stop)
@@ -229,7 +233,8 @@ namespace OpenRCT2
             {
                 revision = _backendRevision;
                 lock.unlock();
-                backend.reset();
+                for (auto& backend : backends)
+                    backend.reset();
                 lock.lock();
                 continue;
             }
@@ -242,6 +247,7 @@ namespace OpenRCT2
             _pending.pop_front();
             const auto epoch = _epoch;
             const auto factory = _factory;
+            const auto comparisonFactory = _comparisonFactory;
             auto cancelled = std::make_shared<std::atomic_bool>(false);
             _cancellation = cancelled;
             _active = true;
@@ -249,10 +255,21 @@ namespace OpenRCT2
             bool failed{};
             try
             {
-                if (!backend)
-                    backend = factory();
-                if (!backend)
+                if (!backends[0])
+                    backends[0] = factory();
+                if (comparisonFactory && !backends[1])
+                    backends[1] = comparisonFactory();
+                auto& backend = backends[static_cast<size_t>(result.cohort)];
+                if (!backends[0] || (comparisonFactory && !backends[1]) || !backend)
                     throw std::runtime_error("Guest decision backend was not created.");
+                if (comparisonFactory)
+                {
+                    backends[0]->prepare(*cancelled);
+                    if (!*cancelled)
+                        backends[1]->prepare(*cancelled);
+                }
+                if (*cancelled)
+                    throw std::runtime_error("Guest decision preparation cancelled.");
                 result.probabilities = backend->decide(result.snapshot, *cancelled);
                 if (!*cancelled)
                     result.choice = SelectGuestDecision(result.probabilities, result.snapshot.candidates.size());
@@ -264,7 +281,8 @@ namespace OpenRCT2
                     LOG_ERROR("Guest decisions unavailable: %s", e.what());
                     failed = true;
                 }
-                backend.reset();
+                for (auto& backend : backends)
+                    backend.reset();
             }
             lock.lock();
             _active = false;
@@ -285,7 +303,8 @@ namespace OpenRCT2
             }
         }
         lock.unlock();
-        backend.reset();
+        for (auto& backend : backends)
+            backend.reset();
     }
 
     static std::unique_ptr<GuestDecisionService> _decisions;
@@ -297,6 +316,19 @@ namespace OpenRCT2
     static std::array<std::optional<GuestDecisionRecord>, kMaxEntities> _latestDecisions;
     static std::deque<GuestDecisionRecord> _decisionHistory;
     static GuestDecisionTraceSink _traceSink;
+    static bool _comparisonRequested{}, _comparisonConfigured{};
+    static std::string _modelId;
+
+    GuestDecisionCohort AssignGuestDecisionCohort(uint32_t guestId)
+    {
+        auto hash = guestId ^ 0xD3A8B517u;
+        hash ^= hash >> 16;
+        hash *= 0x7FEB352Du;
+        hash ^= hash >> 15;
+        hash *= 0x846CA68Bu;
+        hash ^= hash >> 16;
+        return (hash & 1) ? GuestDecisionCohort::fineTuned : GuestDecisionCohort::baseline;
+    }
 
     void SetGuestDecisionTraceSink(GuestDecisionTraceSink sink)
     {
@@ -311,13 +343,19 @@ namespace OpenRCT2
         constexpr std::array outcomes = { "pending", "applied", "unchanged", "low_confidence", "stale" };
         json_t value = {
             { "schema", 1 },
-            { "prompt_variant", omitIncumbentHints ? "incumbent-neutral" : "original" },
+            { "prompt_variant",
+              record.cohort            ? "neutral-anonymous-v1"
+                  : omitIncumbentHints ? "incumbent-neutral"
+                                       : "original" },
             { "entity_id", record.entityId },
             { "guest_id", record.guestId },
             { "tick", snapshot.tick },
             { "outcome", outcomes[static_cast<size_t>(record.outcome)] },
-            { "state", json_t::parse(snapshot.stateJson(omitIncumbentHints)) },
-            { "prompt", snapshot.prompt(omitIncumbentHints) },
+            { "state", json_t::parse(snapshot.stateJson(omitIncumbentHints || record.cohort.has_value())) },
+            { "prompt", snapshot.prompt(omitIncumbentHints || record.cohort.has_value(), record.cohort.has_value()) },
+            { "ab_cohort",
+              record.cohort ? json_t(*record.cohort == GuestDecisionCohort::baseline ? "A" : "B") : json_t(nullptr) },
+            { "model_id", record.modelId },
             { "incumbent_id", snapshot.heading },
             { "elapsed_ms", record.elapsedMilliseconds },
             { "heading_at_apply", record.headingAtApply ? json_t(*record.headingAtApply) : json_t(nullptr) },
@@ -384,7 +422,8 @@ namespace OpenRCT2
     static void RecordDecision(
         const GuestDecisionSnapshot& snapshot, GuestDecisionOutcome outcome, const std::vector<float>& probabilities = {},
         std::optional<size_t> choice = {}, std::chrono::steady_clock::time_point submitted = {},
-        std::optional<uint16_t> headingAtApply = {}, std::string rejection = {})
+        std::optional<uint16_t> headingAtApply = {}, std::string rejection = {},
+        GuestDecisionCohort cohort = GuestDecisionCohort::baseline)
     {
         const auto entityId = snapshot.guest.entityId;
         if (entityId >= _latestDecisions.size())
@@ -392,6 +431,9 @@ namespace OpenRCT2
         GuestDecisionRecord record;
         record.entityId = entityId;
         record.guestId = snapshot.guest.guestId;
+        if (_comparisonConfigured)
+            record.cohort = cohort;
+        record.modelId = _modelId + (record.cohort == GuestDecisionCohort::fineTuned ? "-ft" : "");
         auto* guest = getGameState().entities.tryGetEntity<Guest>(EntityId::FromUnderlying(entityId));
         if (guest && guest->peepId == record.guestId)
             record.guestName = guest->getName();
@@ -441,12 +483,42 @@ namespace OpenRCT2
         return replay && !replay->IsRecording() && !replay->IsReplaying() && !replay->IsNormalising();
     }
 
-    void ConfigureGuestDecisions(GuestDecisionService::Factory factory)
+    std::optional<GuestDecisionCohort> GetGuestDecisionCohort(uint32_t guestId)
     {
+        if (!_comparisonConfigured || !_decisions || !CanRunDecisions())
+            return std::nullopt;
+        const auto status = _decisions->status();
+        if (status == GuestDecisionStatus::disabled || status == GuestDecisionStatus::unavailable)
+            return std::nullopt;
+        return AssignGuestDecisionCohort(guestId);
+    }
+
+    Drawing::Colour GetGuestDecisionShirtColour(uint32_t guestId, Drawing::Colour original)
+    {
+        if (Config::Get().interface.guestDecisionCohortColours)
+        {
+            const auto cohort = GetGuestDecisionCohort(guestId);
+            if (cohort)
+                return *cohort == GuestDecisionCohort::baseline ? Drawing::Colour::lightBlue : Drawing::Colour::brightPurple;
+        }
+        return original;
+    }
+
+    void ConfigureGuestDecisions(
+        GuestDecisionService::Factory factory, GuestDecisionService::Factory comparisonFactory, bool comparison,
+        std::string modelId)
+    {
+        _comparisonRequested = comparison;
+        _comparisonConfigured = comparison && factory && comparisonFactory;
+        _modelId = std::move(modelId);
+        if (comparison && !_comparisonConfigured)
+            factory = nullptr;
+        if (!comparison)
+            comparisonFactory = nullptr;
         if (!_decisions && factory)
-            _decisions = std::make_unique<GuestDecisionService>(std::move(factory));
+            _decisions = std::make_unique<GuestDecisionService>(std::move(factory), std::move(comparisonFactory));
         else if (_decisions)
-            _decisions->reconfigure(std::move(factory));
+            _decisions->reconfigure(std::move(factory), std::move(comparisonFactory));
         _stats = {};
         _cooldowns.fill({});
         _nextRequest = {};
@@ -470,6 +542,8 @@ namespace OpenRCT2
     void ShutdownGuestDecisions()
     {
         _decisions.reset();
+        _comparisonRequested = _comparisonConfigured = false;
+        _modelId.clear();
         _stats = {};
         ClearDecisionRecords();
         _traceSink = {};
@@ -478,6 +552,11 @@ namespace OpenRCT2
     GuestDecisionStats GetGuestDecisionStats()
     {
         auto result = _stats;
+        if (_comparisonRequested && !_comparisonConfigured)
+        {
+            result.status = GuestDecisionStatus::unavailable;
+            return result;
+        }
         if (_decisions)
         {
             result.status = _decisions->status();
@@ -503,6 +582,7 @@ namespace OpenRCT2
         auto& gameState = getGameState();
         while (auto result = _decisions->poll())
         {
+            auto& cohortStats = _stats.cohorts[static_cast<size_t>(result->cohort)];
             auto outcome = GuestDecisionOutcome::lowConfidence;
             std::string rejection;
             auto* guest = gameState.entities.tryGetEntity<Guest>(EntityId::FromUnderlying(result->snapshot.guest.entityId));
@@ -511,6 +591,7 @@ namespace OpenRCT2
             if (!result->choice)
             {
                 ++_stats.fallback;
+                ++cohortStats.fallback;
                 rejection = "low_confidence";
             }
             else
@@ -527,16 +608,19 @@ namespace OpenRCT2
                 if (!applied)
                 {
                     ++_stats.stale;
+                    ++cohortStats.stale;
                     outcome = GuestDecisionOutcome::stale;
                 }
                 else
                 {
                     ++_stats.applied;
+                    ++cohortStats.applied;
                     outcome = unchanged ? GuestDecisionOutcome::unchanged : GuestDecisionOutcome::applied;
                 }
             }
             RecordDecision(
-                result->snapshot, outcome, result->probabilities, result->choice, result->submitted, headingAtApply, rejection);
+                result->snapshot, outcome, result->probabilities, result->choice, result->submitted, headingAtApply, rejection,
+                result->cohort);
         }
         if (_decisions->status() == GuestDecisionStatus::unavailable || now < _nextRequest || now < _nextScan
             || _decisions->outstanding() >= GuestDecisionService::kCapacity)
@@ -557,10 +641,13 @@ namespace OpenRCT2
             _cooldowns[index] = now + std::chrono::seconds(30);
             ++built;
             auto snapshot = guest->captureDecision();
-            if (snapshot && _decisions->submit(*snapshot))
+            const auto cohort = _comparisonConfigured ? AssignGuestDecisionCohort(guest->peepId)
+                                                      : GuestDecisionCohort::baseline;
+            if (snapshot && _decisions->submit(*snapshot, cohort))
             {
-                RecordDecision(*snapshot, GuestDecisionOutcome::pending);
+                RecordDecision(*snapshot, GuestDecisionOutcome::pending, {}, {}, {}, {}, {}, cohort);
                 ++_stats.submitted;
+                ++_stats.cohorts[static_cast<size_t>(cohort)].submitted;
                 _nextRequest = now + std::chrono::milliseconds(250);
                 break;
             }

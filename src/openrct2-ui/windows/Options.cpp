@@ -276,6 +276,9 @@ namespace OpenRCT2::Ui::Windows
         WIDX_GUEST_DECISION_MODEL,
         WIDX_GUEST_DECISION_MODEL_DROPDOWN,
         WIDX_GUEST_DECISION_STATUS,
+        WIDX_GUEST_DECISION_AB,
+        WIDX_GUEST_DECISION_COLOURS,
+        WIDX_GUEST_DECISION_FT_STATUS,
 #endif
     };
 
@@ -492,12 +495,15 @@ namespace OpenRCT2::Ui::Windows
         , makeWidget      ({ 10, kAdvancedStart +100}, {290, 12}, WidgetType::label,        WindowColour::secondary, STR_GUEST_THOUGHT_MODEL                                                                 )
         , makeWidget      ({ 10, kAdvancedStart +115}, {290, 14}, WidgetType::dropdownMenu, WindowColour::secondary, kStringIdNone,                             STR_GUEST_THOUGHT_MODEL_TIP                  )
         , makeWidget      ({288, kAdvancedStart +116}, { 11, 12}, WidgetType::button,       WindowColour::secondary, STR_DROPDOWN_GLYPH,                        STR_GUEST_THOUGHT_MODEL_TIP                  )
-        , makeWidget      ({  5, kAdvancedStart +144}, {300, 86}, WidgetType::groupbox,     WindowColour::secondary, STR_GROUP_GUEST_DECISIONS )
+        , makeWidget      ({  5, kAdvancedStart +144}, {300, 137}, WidgetType::groupbox,     WindowColour::secondary, STR_GROUP_GUEST_DECISIONS )
         , makeWidget      ({ 10, kAdvancedStart +160}, {290, 12}, WidgetType::checkbox,     WindowColour::secondary, STR_ENABLE_GUEST_DECISIONS, STR_GUEST_DECISION_MODEL_TIP )
         , makeWidget      ({ 10, kAdvancedStart +176}, {290, 12}, WidgetType::label,        WindowColour::secondary, STR_GUEST_DECISION_MODEL )
         , makeWidget      ({ 10, kAdvancedStart +191}, {290, 14}, WidgetType::dropdownMenu, WindowColour::secondary, kStringIdNone, STR_GUEST_DECISION_MODEL_TIP )
         , makeWidget      ({288, kAdvancedStart +192}, { 11, 12}, WidgetType::button,       WindowColour::secondary, STR_DROPDOWN_GLYPH, STR_GUEST_DECISION_MODEL_TIP )
         , makeWidget      ({ 10, kAdvancedStart +210}, {290, 12}, WidgetType::label,        WindowColour::secondary, kStringIdNone, STR_GUEST_DECISION_MODEL_TIP )
+        , makeWidget      ({ 10, kAdvancedStart +226}, {290, 12}, WidgetType::checkbox,     WindowColour::secondary, STR_GUEST_DECISION_AB, STR_GUEST_DECISION_AB_TIP )
+        , makeWidget      ({ 10, kAdvancedStart +242}, {290, 12}, WidgetType::checkbox,     WindowColour::secondary, STR_GUEST_DECISION_COLOURS, STR_GUEST_DECISION_COLOURS_TIP )
+        , makeWidget      ({ 10, kAdvancedStart +260}, {290, 12}, WidgetType::label,        WindowColour::secondary, STR_GUEST_DECISION_FT_MISSING )
 #endif
     );
 
@@ -529,6 +535,7 @@ namespace OpenRCT2::Ui::Windows
         std::vector<GuestThoughtModel> _guestThoughtModels;
         std::vector<GuestDecisionModel> _guestDecisionModels;
         std::string _decisionCaption, _decisionStatus;
+        bool _fineTuneAvailable{};
 
         void RefreshGuestDecisionModels()
         {
@@ -536,10 +543,21 @@ namespace OpenRCT2::Ui::Windows
             {
                 const auto directory = Path::GetDirectory(Platform::GetCurrentExecutablePath());
                 _guestDecisionModels = LoadGuestDecisionModels(Path::Combine(directory, "models", "guest-decisions"));
+                _fineTuneAvailable = false;
+                try
+                {
+                    _fineTuneAvailable = IsGuestDecisionFineTuneAvailable(
+                        Path::Combine(directory, "models", "guest-decisions"));
+                }
+                catch (const std::exception& e)
+                {
+                    LOG_ERROR("Fine-tuned guest decision model: %s", e.what());
+                }
             }
             catch (const std::exception& e)
             {
                 _guestDecisionModels.clear();
+                _fineTuneAvailable = false;
                 LOG_ERROR("Guest decision model catalogue: %s", e.what());
                 ContextShowError(STR_GUEST_DECISION_MODELS_UNAVAILABLE, kStringIdNone, {});
             }
@@ -2084,10 +2102,22 @@ namespace OpenRCT2::Ui::Windows
             switch (widgetIndex)
             {
 #ifdef ENABLE_GUEST_THOUGHTS
+                case WIDX_GUEST_DECISION_AB:
+                    Config::Get().interface.guestDecisionAB = !Config::Get().interface.guestDecisionAB;
+                    ApplyGuestDecisionSettings();
+                    Config::Save();
+                    GfxInvalidateScreen();
+                    break;
+                case WIDX_GUEST_DECISION_COLOURS:
+                    Config::Get().interface.guestDecisionCohortColours = !Config::Get().interface.guestDecisionCohortColours;
+                    Config::Save();
+                    GfxInvalidateScreen();
+                    break;
                 case WIDX_GUEST_DECISIONS_ENABLED:
                     Config::Get().interface.guestDecisions = !Config::Get().interface.guestDecisions;
                     ApplyGuestDecisionSettings();
                     Config::Save();
+                    GfxInvalidateScreen();
                     invalidate();
                     break;
                 case WIDX_GUEST_THOUGHTS_ENABLED:
@@ -2321,6 +2351,19 @@ namespace OpenRCT2::Ui::Windows
             }
             _decisionStatus = FormatStringID(status, stats.applied);
             widgets[WIDX_GUEST_DECISION_STATUS].setString(_decisionStatus.c_str());
+            setCheckboxValue(WIDX_GUEST_DECISION_AB, Config::Get().interface.guestDecisionAB);
+            setCheckboxValue(WIDX_GUEST_DECISION_COLOURS, Config::Get().interface.guestDecisionCohortColours);
+            const bool baselineAvailable = std::any_of(
+                _guestDecisionModels.begin(), _guestDecisionModels.end(),
+                [](const auto& model) { return model.id == "d3-lite" && model.available; });
+            setWidgetDisabled(
+                WIDX_GUEST_DECISION_AB,
+                !Config::Get().interface.guestDecisionAB
+                    && (!Config::Get().interface.guestDecisions || Config::Get().interface.guestDecisionModel != "d3-lite"
+                        || !baselineAvailable || !_fineTuneAvailable));
+            setWidgetDisabled(WIDX_GUEST_DECISION_COLOURS, !Config::Get().interface.guestDecisionAB);
+            widgets[WIDX_GUEST_DECISION_FT_STATUS].text = _fineTuneAvailable ? STR_GUEST_DECISION_FT_INSTALLED
+                                                                             : STR_GUEST_DECISION_FT_MISSING;
             setCheckboxValue(WIDX_GUEST_THOUGHTS_ENABLED, Config::Get().interface.guestThoughts);
             const auto selected = GetGuestThoughtModelPath();
             _dropdownCaption = Path::GetFileName(selected);

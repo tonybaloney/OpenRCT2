@@ -403,7 +403,9 @@ namespace OpenRCT2::Ui::Windows
             widgets[WIDX_INFO_TYPE_DROPDOWN].text = GetViewName(_selectedView);
             widgets[WIDX_INFO_TYPE_DROPDOWN].setVisible(_selectedTab != TabId::decisions);
             widgets[WIDX_INFO_TYPE_DROPDOWN_BUTTON].setVisible(_selectedTab != TabId::decisions);
-            widgets[WIDX_GUEST_LIST].top = _selectedTab == TabId::decisions ? 104 : 72;
+            widgets[WIDX_GUEST_LIST].top = _selectedTab == TabId::decisions
+                ? (Config::Get().interface.guestDecisionAB ? 132 : 104)
+                : 72;
             widgets[WIDX_MAP].setVisible(_selectedTab == TabId::individual && _selectedFilter);
 
             widgets[WIDX_GUEST_LIST].right = width - 4;
@@ -449,13 +451,25 @@ namespace OpenRCT2::Ui::Windows
                     FormatStringID(GuestDecisionStatusLabel(stats.status), stats.applied));
                 DrawGuestDecisionText(
                     rt, windowPos + ScreenCoordsXY{ 6, 60 }, width - 12,
-                    FormatStringID(STR_GUEST_DECISION_MODEL_NAME, Config::Get().interface.guestDecisionModel.c_str()));
+                    Config::Get().interface.guestDecisionAB
+                        ? FormatStringID(STR_GUEST_DECISION_AB)
+                        : FormatStringID(STR_GUEST_DECISION_MODEL_NAME, Config::Get().interface.guestDecisionModel.c_str()));
                 DrawGuestDecisionText(
                     rt, windowPos + ScreenCoordsXY{ 6, 74 }, width - 12,
                     FormatStringID(
                         STR_GUEST_DECISION_COUNTERS, stats.applied, stats.fallback, stats.stale,
                         static_cast<uint32_t>(stats.outstanding)));
                 DrawGuestDecisionText(rt, windowPos + ScreenCoordsXY{ 6, 88 }, width - 12, STR_GUEST_DECISION_FEED_HINT);
+                if (Config::Get().interface.guestDecisionAB)
+                    for (size_t i = 0; i < stats.cohorts.size(); ++i)
+                    {
+                        const auto& cohort = stats.cohorts[i];
+                        DrawGuestDecisionText(
+                            rt, windowPos + ScreenCoordsXY{ 6, 102 + static_cast<int32_t>(i) * 14 }, width - 12,
+                            FormatStringID(
+                                STR_GUEST_DECISION_COHORT_COUNTERS, i == 0 ? "A" : "B", cohort.applied, cohort.fallback,
+                                cohort.stale, cohort.submitted));
+                    }
                 return;
             }
 
@@ -710,7 +724,10 @@ namespace OpenRCT2::Ui::Windows
             {
                 if (y + kDecisionRowHeight > rt.y && y < rt.y + rt.height)
                 {
-                    DrawGuestDecisionText(rt, { 3, y }, 134, record.guestName);
+                    DrawGuestDecisionText(
+                        rt, { 3, y }, 134,
+                        (record.cohort ? std::string(*record.cohort == GuestDecisionCohort::baseline ? "A: " : "B: ") : "")
+                            + record.guestName);
                     DrawGuestDecisionText(rt, { 140, y }, rowWidth - 140, GuestDecisionOutcomeLabel(record));
                     if (!record.probabilities.empty())
                     {
