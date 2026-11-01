@@ -16,6 +16,14 @@
 
 namespace OpenRCT2::Ui
 {
+    struct GuestDecisionOverlaySelection
+    {
+        uint16_t entityId{};
+        uint32_t guestId{};
+    };
+
+    inline std::optional<GuestDecisionOverlaySelection> gGuestDecisionOverlaySelection;
+
     inline void DrawGuestDecisionText(Drawing::RenderTarget& rt, ScreenCoordsXY pos, int32_t width, std::string_view text)
     {
         drawText(rt, pos, "{BLACK}");

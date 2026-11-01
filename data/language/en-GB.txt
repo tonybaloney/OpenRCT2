@@ -3904,3 +3904,7 @@ STR_7110    :{INT32}%
 STR_7111    :Model's top choice: {STRING}
 STR_7112    :Only walking guests with at least two eligible destinations are considered. Scans and inference are budgeted; each guest has a 30-second cooldown.
 STR_7113    :Model: {STRING}
+STR_7114    :Show destinations on park
+STR_7115    :Show this guest's latest offered destinations on the park. Lines are not pathfinding routes.
+STR_7116    :Blue: offered. Green: accepted. Orange: current target. Lines are not routes.
+STR_7117    :Current target

@@ -118,6 +118,8 @@ namespace OpenRCT2::Ui::Windows
         WIDX_RECENT_THOUGHTS_LABEL = WIDX_TAB_CONTENT_START,
 
         WIDX_CARRYING_LABEL = WIDX_TAB_CONTENT_START,
+
+        WIDX_DECISION_OVERLAY = WIDX_TAB_CONTENT_START,
     };
 
     VALIDATE_GLOBAL_WIDX(WC_PEEP, WIDX_PICKUP);
@@ -191,6 +193,11 @@ namespace OpenRCT2::Ui::Windows
         kMainGuestWidgets
     );
 
+    static constexpr auto _guestWindowWidgetsDecisions = makeWidgets(
+        kMainGuestWidgets,
+        makeWidget({ 6, 348 }, { 288, 14 }, WidgetType::checkbox, WindowColour::secondary, STR_GUEST_DECISION_OVERLAY, STR_GUEST_DECISION_OVERLAY_TIP)
+    );
+
     static constexpr std::span<const Widget> _guestWindowPageWidgets[] = {
         _guestWindowWidgetsOverview,
         _guestWindowWidgetsStats,
@@ -198,7 +205,7 @@ namespace OpenRCT2::Ui::Windows
         _guestWindowWidgetsFinance,
         _guestWindowWidgetsThoughts,
         _guestWindowWidgetsInventory,
-        _guestWindowWidgetsDebug,
+        _guestWindowWidgetsDecisions,
         _guestWindowWidgetsDebug,
     };
     static_assert(std::size(_guestWindowPageWidgets) == WINDOW_GUEST_PAGE_COUNT);
@@ -297,6 +304,7 @@ namespace OpenRCT2::Ui::Windows
         void onClose() override
         {
             releaseGeneratedThought();
+            clearDecisionOverlay();
             if (isToolActive(classification, number))
                 ToolCancel();
         }
@@ -322,6 +330,23 @@ namespace OpenRCT2::Ui::Windows
 
             switch (page)
             {
+                case WINDOW_GUEST_DECISIONS:
+                    if (widx == WIDX_DECISION_OVERLAY)
+                    {
+                        if (const auto* guest = GetGuest())
+                        {
+                            if (gGuestDecisionOverlaySelection && gGuestDecisionOverlaySelection->entityId == number
+                                && gGuestDecisionOverlaySelection->guestId == guest->peepId)
+                                clearDecisionOverlay();
+                            else
+                                gGuestDecisionOverlaySelection = GuestDecisionOverlaySelection{ guest->id.ToUnderlying(),
+                                                                                                guest->peepId };
+                            if (auto* main = WindowGetMain())
+                                main->invalidate();
+                            invalidate();
+                        }
+                    }
+                    break;
                 case WINDOW_GUEST_OVERVIEW:
                     onMouseUpOverview(widx);
                     break;
@@ -466,6 +491,16 @@ namespace OpenRCT2::Ui::Windows
                 case WINDOW_GUEST_RIDES:
                     onPrepareDrawRides();
                     break;
+                case WINDOW_GUEST_DECISIONS:
+                    widgets[WIDX_DECISION_OVERLAY].top = height - 22;
+                    widgets[WIDX_DECISION_OVERLAY].bottom = height - 8;
+                    widgets[WIDX_DECISION_OVERLAY].right = width - 6;
+                    if (const auto* guest = GetGuest())
+                        setWidgetPressed(
+                            WIDX_DECISION_OVERLAY,
+                            gGuestDecisionOverlaySelection && gGuestDecisionOverlaySelection->entityId == number
+                                && gGuestDecisionOverlaySelection->guestId == guest->peepId);
+                    break;
             }
         }
         ScreenSize onScrollGetSize(int32_t scrollIndex) override
@@ -500,6 +535,16 @@ namespace OpenRCT2::Ui::Windows
         }
 
     private:
+        void clearDecisionOverlay()
+        {
+            if (gGuestDecisionOverlaySelection && gGuestDecisionOverlaySelection->entityId == number)
+            {
+                gGuestDecisionOverlaySelection.reset();
+                if (auto* main = WindowGetMain())
+                    main->invalidate();
+            }
+        }
+
         Guest* GetGuest()
         {
             auto guest = getGameState().entities.getEntity<Guest>(EntityId::FromUnderlying(number));
@@ -593,6 +638,7 @@ namespace OpenRCT2::Ui::Windows
                 return;
 
             releaseGeneratedThought();
+            clearDecisionOverlay();
             page = newPage;
             currentFrame = 0;
             _riddenRides.clear();

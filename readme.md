@@ -270,6 +270,16 @@ over the offered choices, not calibrated certainty. Only eligible walking guests
 guests without two destinations may have no record. These diagnostic records are bounded,
 client-local, cleared on park/model changes and never saved.
 
+In a guest's **D3 tab**, enable **Show destinations on park** to overlay their
+latest offered choices on the main viewport. A-H labels match the tab and include
+available model scores. Blue marks offered choices, green an accepted choice,
+and orange the current target (also identified in its label). Lines connect the
+guest's current position to the same station anchors used for candidate distance,
+not entrances or pathfinding routes. The legend shows the recorded outcome and
+age; it is not a live eligibility or correctness check. Only one guest can be
+shown at a time. Switching tabs, closing that guest window or loading another
+park clears the overlay. It does not request inference or change simulation state.
+
 Results older than five wall-clock seconds or 512 simulation ticks, reused guest IDs, changed
 motives/intents, and newly ineligible targets are rejected on the simulation thread. Low confidence,
 timeouts and failures leave native behavior running. Approved choices update the existing target,
